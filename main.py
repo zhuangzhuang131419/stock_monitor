@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import configparser
 import sys
+import numpy as np  # <--- 新增导入 numpy 用于数学计算
 
 
 # ==============================================================================
-# 1. 配置加载模块
+# 1. 配置加载模块 (已更新)
 # ==============================================================================
 
-def load_config() -> Tuple[str, str, str, int, int, List[Tuple[str, float]]]:
+def load_config() -> Tuple[str, str, str, str, int, int, List[Tuple[str, float]]]:
     """
     从 config.ini 文件加载所有配置。
     如果文件不存在，会创建一个默认模板并退出。
@@ -27,7 +28,8 @@ def load_config() -> Tuple[str, str, str, int, int, List[Tuple[str, float]]]:
         default_config['General'] = {
             'api_key': 'YOUR_API_KEY_HERE',
             'history_file': 'portfolio_history.csv',
-            'plot_file': 'portfolio_chart.png'  # <--- 新增默认配置
+            'plot_file': 'portfolio_chart.png',
+            'pie_chart_file': 'portfolio_pie_chart.png'  # <--- 新增: 饼图文件名
         }
         default_config['Portfolio'] = {
             'AAPL': '100',
@@ -47,7 +49,8 @@ def load_config() -> Tuple[str, str, str, int, int, List[Tuple[str, float]]]:
     try:
         api_key = config.get('General', 'api_key')
         history_file = config.get('General', 'history_file')
-        plot_file = config.get('General', 'plot_file')  # <--- 新增: 读取图表文件名
+        plot_file = config.get('General', 'plot_file')
+        pie_chart_file = config.get('General', 'pie_chart_file')  # <--- 新增: 读取饼图文件名
         max_retries = config.getint('Settings', 'max_retries')
         retry_delay = config.getint('Settings', 'retry_delay_seconds')
 
@@ -59,20 +62,19 @@ def load_config() -> Tuple[str, str, str, int, int, List[Tuple[str, float]]]:
             print("错误: 配置文件中的 [Portfolio] 部分为空，请至少添加一只股票。")
             sys.exit()
 
-        # <--- 修改返回内容
-        return api_key, history_file, plot_file, max_retries, retry_delay, portfolio
+        return api_key, history_file, plot_file, pie_chart_file, max_retries, retry_delay, portfolio
 
     except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
         print(f"错误: 配置文件 'config.ini' 格式不正确或缺少必要项: {e}")
         sys.exit()
 
 
-# 在程序开始时加载所有配置
-API_KEY, HISTORY_FILE, PLOT_FILE, MAX_RETRIES, RETRY_DELAY, portfolio = load_config()
+# 在程序开始时加载所有配置 (已更新)
+API_KEY, HISTORY_FILE, PLOT_FILE, PIE_CHART_FILE, MAX_RETRIES, RETRY_DELAY, portfolio = load_config()
 
 
 # ==============================================================================
-# 2. 获取股票价格的核心函数
+# 2. 获取股票价格的核心函数 (无变化)
 # ==============================================================================
 def get_stock_price(ticker: str) -> Union[tuple[float, str], None]:
     url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={API_KEY}'
@@ -99,7 +101,7 @@ def get_stock_price(ticker: str) -> Union[tuple[float, str], None]:
 
 
 # ==============================================================================
-# 3. 计算总价值并打印结果
+# 3. 计算总价值并打印结果 (无变化)
 # ==============================================================================
 def calculate_portfolio_value() -> tuple[float, dict, Union[str, None]]:
     total_value = 0.0
@@ -139,7 +141,7 @@ def calculate_portfolio_value() -> tuple[float, dict, Union[str, None]]:
 
 
 # ==============================================================================
-# 4. 将历史数据保存到文件
+# 4. 将历史数据保存到文件 (无变化)
 # ==============================================================================
 def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
     if not os.path.exists(HISTORY_FILE):
@@ -165,7 +167,11 @@ def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
         new_data_list = new_line_str.split(',')
         df.loc[date_to_save, 'total_value'] = float(new_data_list[1])
         for i, ticker in enumerate(all_tickers):
-            df.loc[date_to_save, ticker] = float(new_data_list[i + 2])
+            if ticker in df.columns:
+                df.loc[date_to_save, ticker] = float(new_data_list[i + 2])
+            else:  # 新增的 Ticker
+                df[ticker] = 0.0
+                df.loc[date_to_save, ticker] = float(new_data_list[i + 2])
         df.reset_index(inplace=True)
         print(f"\n提示: 日期 {date_to_save} 的数据已存在，将进行覆盖更新。")
     else:
@@ -178,12 +184,11 @@ def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
 
 
 # ==============================================================================
-# 5. 绘制历史价值图表并保存到文件
+# 5. 绘制历史价值图表 (已更新)
 # ==============================================================================
-
 def plot_history_graph(output_filename: str):
     """
-    读取历史数据文件，绘制图表，并将其保存到指定的输出文件。
+    读取历史数据文件，绘制堆叠面积图，并将标签直接写在区域内。
     """
     if not os.path.exists(HISTORY_FILE):
         print("找不到历史数据文件，无法绘制图表。")
@@ -195,10 +200,35 @@ def plot_history_graph(output_filename: str):
         return
 
     stock_columns = [col for col in df.columns if col != 'total_value']
+
     fig, ax = plt.subplots(figsize=(16, 9))
-    ax.stackplot(df.index, [df[col] for col in stock_columns], labels=stock_columns, alpha=0.8)
+
+    # --- 核心修改: 绘制堆叠图，但不生成图例 ---
+    ax.stackplot(df.index, [df[col] for col in stock_columns], alpha=0.8)
+
+    # 绘制总价值曲线
     ax.plot(df.index, df['total_value'], color='black', linewidth=2, linestyle='--', label='Total Value')
-    ax.legend(loc='upper left')
+
+    # --- 核心修改: 在每个颜色区域内添加文字标签 ---
+    y_bottom = np.zeros(len(df.index))
+    mid_point_idx = len(df.index) // 2
+    total_value_at_midpoint = df['total_value'].iloc[mid_point_idx]
+
+    for col in stock_columns:
+        y_values = df[col].values
+        # 计算标签的垂直位置：在该区域垂直方向的中间
+        y_label_pos = y_bottom[mid_point_idx] + y_values[mid_point_idx] / 2
+        x_label_pos = df.index[mid_point_idx]
+
+        # 为了避免标签重叠，只为占比超过3%的区域添加标签
+        if y_values[mid_point_idx] > total_value_at_midpoint * 0.03:
+            ax.text(x_label_pos, y_label_pos, col,
+                    ha='center', va='center', color='white',
+                    fontsize=12, fontweight='bold')
+
+        # 更新下一次堆叠的基线
+        y_bottom += y_values
+
     ax.set_title('Portfolio Value Over Time', fontsize=20)
     ax.set_ylabel('Value ($)', fontsize=14)
     ax.set_xlabel('Date', fontsize=14)
@@ -208,30 +238,89 @@ def plot_history_graph(output_filename: str):
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    # --- 核心修改 ---
     try:
-        # 将图表保存到文件，而不是显示它
-        # dpi=300 保证了较高的分辨率
-        # bbox_inches='tight' 会自动裁剪空白边缘，让图片更紧凑
         plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-        print(f"\n成功: 图表已保存到文件 '{output_filename}'")
+        print(f"\n成功: 历史趋势图已保存到文件 '{output_filename}'")
     except Exception as e:
-        print(f"\n错误: 保存图表文件时出错: {e}")
+        print(f"\n错误: 保存历史趋势图文件时出错: {e}")
     finally:
-        # 关闭图形，释放内存
         plt.close(fig)
 
 
 # ==============================================================================
-# 6. 主执行逻辑
+# 6. 新增: 绘制当日仓位饼图
 # ==============================================================================
+def plot_pie_chart(stock_values: dict, total_value: float, output_filename: str):
+    """
+    根据当日的各项股票价值，绘制仓位占比饼图。
+    """
+    print(f"正在生成当日仓位饼图...")
 
+    # 过滤掉价值为0或负数的持仓
+    positive_stock_values = {k: v for k, v in stock_values.items() if v > 0}
+    if not positive_stock_values or total_value <= 0:
+        print("没有有效的持仓数据可用于生成饼图。")
+        return
+
+    tickers = list(positive_stock_values.keys())
+    sizes = list(positive_stock_values.values())
+
+    fig, ax = plt.subplots(figsize=(12, 9))
+
+    # --- 核心实现: 绘制饼图，并在扇区内添加 Ticker 和百分比 ---
+
+    # 1. 先只画出饼图的基本结构
+    wedges, _ = ax.pie(sizes, startangle=90, colors=plt.cm.viridis(np.linspace(0, 1, len(sizes))))
+
+    # 2. 循环遍历每个扇区，手动添加自定义标签
+    for i, p in enumerate(wedges):
+        # 计算每个扇区中间点的角度
+        ang = (p.theta2 - p.theta1) / 2. + p.theta1
+
+        # 根据角度计算标签的 (x, y) 坐标，位置在半径的70%处
+        radius = 0.7
+        x = radius * np.cos(np.deg2rad(ang))
+        y = radius * np.sin(np.deg2rad(ang))
+
+        # 准备标签文字：股票代码 + 百分比
+        ticker = tickers[i]
+        percentage = (sizes[i] / total_value) * 100
+        label_text = f"{ticker}\n{percentage:.1f}%"
+
+        # 在计算出的位置上添加文字
+        ax.text(x, y, label_text,
+                ha='center', va='center',  # 水平和垂直居中
+                color='white',  # 文字颜色
+                fontweight='bold',  # 字体加粗
+                fontsize=11)  # 字体大小
+
+    ax.set_title('Portfolio Composition (Today)', fontsize=20)
+    ax.axis('equal')  # 保证饼图是正圆形
+
+    try:
+        plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+        print(f"成功: 当日仓位饼图已保存到文件 '{output_filename}'")
+    except Exception as e:
+        print(f"\n错误: 保存仓位饼图文件时出错: {e}")
+    finally:
+        plt.close(fig)
+
+
+# ==============================================================================
+# 7. 主执行逻辑 (已更新)
+# ==============================================================================
 if __name__ == "__main__":
     final_total_value, individual_stock_values, data_date = calculate_portfolio_value()
+
     if final_total_value > 0 and data_date is not None:
+        # 保存历史记录
         save_history(data_date, final_total_value, individual_stock_values)
-        # 调用函数绘制图表，并传入从配置中读取的文件名
+
+        # 绘制历史趋势图
         plot_history_graph(PLOT_FILE)
+
+        # 新增: 绘制当日仓位饼图
+        plot_pie_chart(individual_stock_values, final_total_value, PIE_CHART_FILE)
+
     elif data_date is None:
         print("\n错误: 未能从API获取到有效的交易日期，无法保存和绘图。")
-

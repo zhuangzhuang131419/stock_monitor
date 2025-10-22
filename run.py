@@ -102,30 +102,24 @@ def run_scheduled_task():
 # 4. 主服务循环
 # ==============================================================================
 if __name__ == "__main__":
-    print("--- 测试模式：立即执行一次任务 ---")
+    print("\n自动化服务已启动。")
+    print(f"将在每天美东时间 {SCHEDULED_HOUR}:00 左右运行任务。")
+    print("按 Ctrl+C 停止服务。")
+    last_run_date = None
     run_scheduled_task()
-    print("\n--- 测试完成 ---")
 
-    # 测试完成后，如果您想让它作为后台服务运行，
-    # 请删除或注释掉上面的三行，并取消下面代码的注释。
-
-    # print("\n自动化服务已启动。")
-    # print(f"将在每天美东时间 {SCHEDULED_HOUR}:00 左右运行任务。")
-    # print("按 Ctrl+C 停止服务。")
-    # last_run_date = None
-    #
-    # while True:
-    #     try:
-    #         now_et = datetime.now(TIMEZONE)
-    #         if now_et.hour == SCHEDULED_HOUR and now_et.date() != last_run_date:
-    #             run_scheduled_task()
-    #             last_run_date = now_et.date()
-    #             print(f"\n任务已执行。等待下一个调度周期...")
-    #         time.sleep(60)
-    #     except KeyboardInterrupt:
-    #         print("\n服务已手动停止。")
-    #         break
-    #     except Exception as e:
-    #         print(f"\n发生意外错误: {e}")
-    #         print("服务将在60秒后继续...")
-    #         time.sleep(60)
+    while True:
+        try:
+            now_et = datetime.now(TIMEZONE)
+            if now_et.hour == SCHEDULED_HOUR and now_et.date() != last_run_date:
+                run_scheduled_task()
+                last_run_date = now_et.date()
+                print(f"\n任务已执行。等待下一个调度周期...")
+            time.sleep(60)
+        except KeyboardInterrupt:
+            print("\n服务已手动停止。")
+            break
+        except Exception as e:
+            print(f"\n发生意外错误: {e}")
+            print("服务将在60秒后继续...")
+            time.sleep(60)
