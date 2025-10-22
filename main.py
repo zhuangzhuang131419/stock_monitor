@@ -142,9 +142,15 @@ def calculate_portfolio_value() -> tuple[float, dict, Union[str, None]]:
 
 
 # ==============================================================================
-# 4. 将历史数据保存到文件 (无变化)
+# 4. 将历史数据保存到文件 (已按要求修改)
 # ==============================================================================
 def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
+    """
+    将当前数据保存到历史文件。
+    - 如果文件不存在，则创建。
+    - 如果日期已存在，则覆盖更新该行。
+    - 如果是新日期，则将数据插入到文件的第一行。
+    """
     if not os.path.exists(HISTORY_FILE):
         current_tickers = sorted(stock_values.keys())
         header = 'date,total_value,' + ','.join(current_tickers) + '\n'
@@ -176,16 +182,24 @@ def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
         df.reset_index(inplace=True)
         print(f"\n提示: 日期 {date_to_save} 的数据已存在，将进行覆盖更新。")
     else:
+        # --- 主要修改点 ---
+        # 创建新行 DataFrame
         new_row_df = pd.DataFrame([new_line_str.split(',')], columns=['date', 'total_value'] + all_tickers)
-        df = pd.concat([df, new_row_df], ignore_index=True)
-        print(f"\n成功: 已将日期 {date_to_save} 的新数据追加到 {HISTORY_FILE}")
+        # 将新行与旧的 DataFrame 合并，新行在前
+        df = pd.concat([new_row_df, df], ignore_index=True)
+        print(f"\n成功: 已将日期 {date_to_save} 的新数据插入到 {HISTORY_FILE} 的开头。")
 
     df.fillna(0, inplace=True)
+
+    # 为确保每次保存的列顺序一致，按规则重新排列列
+    final_columns = ['date', 'total_value'] + all_tickers
+    df = df[final_columns]
+
     df.to_csv(HISTORY_FILE, index=False, float_format='%.2f')
 
 
 # ==============================================================================
-# 5. 绘制历史价值图表 (最终版)
+# 5. 绘制历史价值图表 (已添加排序以兼容修改)
 # ==============================================================================
 def plot_history_graph(output_filename: str):
     """
@@ -196,6 +210,11 @@ def plot_history_graph(output_filename: str):
         print("找不到历史数据文件，无法绘制图表。")
         return
     df = pd.read_csv(HISTORY_FILE, index_col='date', parse_dates=True)
+
+    # --- 必要的新增行 ---
+    # 因为数据是按倒序存储的，绘图前必须按时间顺序对索引进行排序
+    df.sort_index(inplace=True)
+
     df.fillna(0, inplace=True)
     if len(df) < 2:
         print("历史数据不足两个点，无法生成图表。")
@@ -212,32 +231,24 @@ def plot_history_graph(output_filename: str):
     ax.plot(df.index, df['total_value'], color='black', linewidth=2, linestyle='--', label='Total Value')
 
     # --- 3. 核心修改: 在每个区域的建仓日（最左侧）添加带描边的标签 ---
-    # 预先计算出每日每个区域的“底部”Y坐标，这比在循环中计算更高效
     y_bottom_df = df[stock_columns].cumsum(axis=1).shift(1, axis=1).fillna(0)
 
     for col in stock_columns:
-        # 找到该股票第一次出现（价值>0）的日期
         first_holding_mask = df[col] > 0
         if not first_holding_mask.any():
-            continue  # 如果该股票从未被持有，则跳过
+            continue
 
         first_holding_day = first_holding_mask.idxmax()
-
-        # 获取建仓日当天的股票价值和其下方的基线价值
         stock_value_on_day = df.loc[first_holding_day, col]
         y_bottom_on_day = y_bottom_df.loc[first_holding_day, col]
-
-        # 计算标签的Y坐标：位于该区域当日的垂直中心
         label_y_pos = y_bottom_on_day + stock_value_on_day / 2.0
 
-        # 在图表上添加文字标签
-        ax.text(first_holding_day, label_y_pos, " " + col,  # 在文字前加空格作为内边距
-                ha='left',  # 水平左对齐
-                va='center',  # 垂直居中
-                color='white',  # 文字颜色为白色
+        ax.text(first_holding_day, label_y_pos, " " + col,
+                ha='left',
+                va='center',
+                color='white',
                 fontsize=11,
                 fontweight='bold',
-                # 添加描边效果：3个像素宽的黑色描边
                 path_effects=[path_effects.withStroke(linewidth=3, foreground='black')])
 
     ax.set_title('Portfolio Value Over Time', fontsize=20)
@@ -246,8 +257,6 @@ def plot_history_graph(output_filename: str):
     ax.grid(True, linestyle='--', alpha=0.5)
     formatter = mticker.FormatStrFormatter('$%1.0f')
     ax.yaxis.set_major_formatter(formatter)
-
-    # 精确设置X轴范围，使其从第一个日期开始，到最后一个日期结束
     ax.set_xlim(df.index[0], df.index[-1])
 
     plt.xticks(rotation=45)
