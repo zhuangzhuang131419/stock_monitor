@@ -81,44 +81,61 @@ portfolio_pie_chart.png
 在 `.github/workflows/stock-monitor.yml` 中添加以下内容，可让脚本每日自动运行并提交结果：
 
 ```yaml
-name: stock-monitor
+# 工作流名称
+name: Run Python Script
+
+# 工作流的触发条件
 on:
-  schedule:
-    - cron: '0 0 * * 1-5'  # 每个工作日 UTC 00:00 执行
+  # 1. 允许您在 GitHub 页面的 "Actions" 标签下手动点击运行
   workflow_dispatch:
+  
+  # 2. 定时触发 (使用 Cron 语法)
+  schedule:
+    # 工作日 22:00 UTC 运行。
+    # - 标准时间期间 (约11月-3月): 对应美东下午 5:00 (UTC-5)
+    # - 夏令时期间 (约3月-11月): 对应美东下午 6:00 (UTC-4)
+    - cron: '0 22 * * 1-5'
 
+# 定义具体要执行的任务
 jobs:
-  run-monitor:
+  build-and-commit:
+    # 在一个最新的 Ubuntu 虚拟服务器上运行
     runs-on: ubuntu-latest
+
+    # <<< 新增内容：授予工作流写权限
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v4
+      # 第1步：将您的代码仓库下载到虚拟服务器上
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
+      # 第2步：设置 Python 3.10 环境
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
+      # 第3步：安装脚本运行所需的 Python 库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests pandas matplotlib numpy
 
-      - name: Run stock monitor
-        env:
-          ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
+      # 第4步：直接运行您的主脚本
+      - name: Run main script
+        run: python main.py
+
+      # 第5步：将新生成或更新的文件提交回您的代码仓库
+      - name: Commit updated files
         run: |
-          # 通过环境变量替换 config.ini 里的 api_key（可选）
-          sed -i "s/api_key = .*/api_key = ${ALPHA_API_KEY}/" config.ini
-          python main.py
-
-      - name: Commit results
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Auto update: portfolio results"
-          file_pattern: |
-            portfolio_history.csv
-            portfolio_chart.png
-            portfolio_pie_chart.png
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png
+          # 检查是否有文件被修改，如果有，才执行提交和推送
+          git diff --staged --quiet || git commit -m "📊 Automated data and chart update"
+          git push
 ```
 
 ### 📌 注意事项
