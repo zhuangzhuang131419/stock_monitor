@@ -19,6 +19,10 @@ jobs:
     # 在一个最新的 Ubuntu 虚拟服务器上运行
     runs-on: ubuntu-latest
 
+    # <<< 新增内容：授予工作流写权限
+    permissions:
+      contents: write
+
     steps:
       # 第1步：将您的代码仓库下载到虚拟服务器上
       - name: Checkout repository
@@ -37,7 +41,6 @@ jobs:
           pip install requests pandas matplotlib numpy
 
       # 第4步：直接运行您的主脚本
-      # 它会自动使用您仓库中的 config.ini 文件
       - name: Run main script
         run: python main.py
 
