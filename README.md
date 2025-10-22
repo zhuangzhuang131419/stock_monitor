@@ -123,9 +123,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests pandas matplotlib numpy
 
-      # 第4步：直接运行您的主脚本
+      # 第4步：运行主脚本（新增 API key 环境变量判断）
       - name: Run main script
-        run: python main.py
+        env:
+          ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
+        run: |
+          echo "=== Running main.py ==="
+          
+          # 如果设置了 GitHub Secrets，则替换 config.ini 中的 API Key
+          if [ -n "${ALPHA_API_KEY}" ]; then
+            echo "✅ Found ALPHA_API_KEY from secrets. Updating config.ini..."
+            if grep -q "^api_key" config.ini; then
+              sed -i "s/^api_key = .*/api_key = ${ALPHA_API_KEY}/" config.ini
+            else
+              echo "api_key = ${ALPHA_API_KEY}" >> config.ini
+            fi
+          else
+            echo "⚠️ Warning: ALPHA_API_KEY not set. Using existing key in config.ini."
+          fi
+
+          # 运行主程序
+          python main.py
 
       # 第5步：将新生成或更新的文件提交回您的代码仓库
       - name: Commit updated files
