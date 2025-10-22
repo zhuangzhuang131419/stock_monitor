@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import configparser
 import sys
-import numpy as np  # <--- 新增导入 numpy 用于数学计算
+import numpy as np
+import matplotlib.patheffects as path_effects
 
 
 # ==============================================================================
@@ -184,11 +185,12 @@ def save_history(date_to_save: str, value_to_save: float, stock_values: dict):
 
 
 # ==============================================================================
-# 5. 绘制历史价值图表 (已更新)
+# 5. 绘制历史价值图表 (最终版)
 # ==============================================================================
 def plot_history_graph(output_filename: str):
     """
-    读取历史数据文件，绘制堆叠面积图，并将标签直接写在区域内。
+    读取历史数据文件，绘制堆叠面积图。
+    标签会统一使用带黑色描边的白色文字，并标注在每个持仓的建仓日（最左侧）。
     """
     if not os.path.exists(HISTORY_FILE):
         print("找不到历史数据文件，无法绘制图表。")
@@ -203,31 +205,40 @@ def plot_history_graph(output_filename: str):
 
     fig, ax = plt.subplots(figsize=(16, 9))
 
-    # --- 核心修改: 绘制堆叠图，但不生成图例 ---
-    ax.stackplot(df.index, [df[col] for col in stock_columns], alpha=0.8)
+    # --- 1. 绘制堆叠面积图 ---
+    ax.stackplot(df.index, [df[col] for col in stock_columns], alpha=0.8, labels=stock_columns)
 
-    # 绘制总价值曲线
+    # --- 2. 绘制总价值曲线 ---
     ax.plot(df.index, df['total_value'], color='black', linewidth=2, linestyle='--', label='Total Value')
 
-    # --- 核心修改: 在每个颜色区域内添加文字标签 ---
-    y_bottom = np.zeros(len(df.index))
-    mid_point_idx = len(df.index) // 2
-    total_value_at_midpoint = df['total_value'].iloc[mid_point_idx]
+    # --- 3. 核心修改: 在每个区域的建仓日（最左侧）添加带描边的标签 ---
+    # 预先计算出每日每个区域的“底部”Y坐标，这比在循环中计算更高效
+    y_bottom_df = df[stock_columns].cumsum(axis=1).shift(1, axis=1).fillna(0)
 
     for col in stock_columns:
-        y_values = df[col].values
-        # 计算标签的垂直位置：在该区域垂直方向的中间
-        y_label_pos = y_bottom[mid_point_idx] + y_values[mid_point_idx] / 2
-        x_label_pos = df.index[mid_point_idx]
+        # 找到该股票第一次出现（价值>0）的日期
+        first_holding_mask = df[col] > 0
+        if not first_holding_mask.any():
+            continue  # 如果该股票从未被持有，则跳过
 
-        # 为了避免标签重叠，只为占比超过3%的区域添加标签
-        if y_values[mid_point_idx] > total_value_at_midpoint * 0.03:
-            ax.text(x_label_pos, y_label_pos, col,
-                    ha='center', va='center', color='white',
-                    fontsize=12, fontweight='bold')
+        first_holding_day = first_holding_mask.idxmax()
 
-        # 更新下一次堆叠的基线
-        y_bottom += y_values
+        # 获取建仓日当天的股票价值和其下方的基线价值
+        stock_value_on_day = df.loc[first_holding_day, col]
+        y_bottom_on_day = y_bottom_df.loc[first_holding_day, col]
+
+        # 计算标签的Y坐标：位于该区域当日的垂直中心
+        label_y_pos = y_bottom_on_day + stock_value_on_day / 2.0
+
+        # 在图表上添加文字标签
+        ax.text(first_holding_day, label_y_pos, " " + col,  # 在文字前加空格作为内边距
+                ha='left',  # 水平左对齐
+                va='center',  # 垂直居中
+                color='white',  # 文字颜色为白色
+                fontsize=11,
+                fontweight='bold',
+                # 添加描边效果：3个像素宽的黑色描边
+                path_effects=[path_effects.withStroke(linewidth=3, foreground='black')])
 
     ax.set_title('Portfolio Value Over Time', fontsize=20)
     ax.set_ylabel('Value ($)', fontsize=14)
@@ -235,6 +246,10 @@ def plot_history_graph(output_filename: str):
     ax.grid(True, linestyle='--', alpha=0.5)
     formatter = mticker.FormatStrFormatter('$%1.0f')
     ax.yaxis.set_major_formatter(formatter)
+
+    # 精确设置X轴范围，使其从第一个日期开始，到最后一个日期结束
+    ax.set_xlim(df.index[0], df.index[-1])
+
     plt.xticks(rotation=45)
     plt.tight_layout()
 
@@ -248,11 +263,12 @@ def plot_history_graph(output_filename: str):
 
 
 # ==============================================================================
-# 6. 新增: 绘制当日仓位饼图
+# 6. 新增: 绘制当日仓位饼图 (已更新描边效果)
 # ==============================================================================
 def plot_pie_chart(stock_values: dict, total_value: float, output_filename: str):
     """
     根据当日的各项股票价值，绘制仓位占比饼图。
+    所有文字（股票代码和百分比）都会被设置为带黑色描边的白色字体。
     """
     print(f"正在生成当日仓位饼图...")
 
@@ -267,7 +283,7 @@ def plot_pie_chart(stock_values: dict, total_value: float, output_filename: str)
 
     fig, ax = plt.subplots(figsize=(12, 9))
 
-    # --- 核心实现: 绘制饼图，并在扇区内添加 Ticker 和百分比 ---
+    # --- 核心实现: 绘制饼图，并在扇区内添加带描边的 Ticker 和百分比 ---
 
     # 1. 先只画出饼图的基本结构
     wedges, _ = ax.pie(sizes, startangle=90, colors=plt.cm.viridis(np.linspace(0, 1, len(sizes))))
@@ -287,12 +303,14 @@ def plot_pie_chart(stock_values: dict, total_value: float, output_filename: str)
         percentage = (sizes[i] / total_value) * 100
         label_text = f"{ticker}\n{percentage:.1f}%"
 
-        # 在计算出的位置上添加文字
+        # 在计算出的位置上添加文字，并加入描边效果
         ax.text(x, y, label_text,
                 ha='center', va='center',  # 水平和垂直居中
-                color='white',  # 文字颜色
-                fontweight='bold',  # 字体加粗
-                fontsize=11)  # 字体大小
+                color='white',             # 文字颜色
+                fontweight='bold',         # 字体加粗
+                fontsize=11,               # 字体大小
+                # --- 核心改动: 添加描边效果 ---
+                path_effects=[path_effects.withStroke(linewidth=3, foreground='black')])
 
     ax.set_title('Portfolio Composition (Today)', fontsize=20)
     ax.axis('equal')  # 保证饼图是正圆形
