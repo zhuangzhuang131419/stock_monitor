@@ -1,5 +1,5 @@
 // --- 全局常量与变量 ---
-const WORKFLOW_FILE_NAME = 'main.yml';
+const WORKFLOW_FILE_NAME = 'run_script.yml';
 const CONFIG_FILE_PATH = 'config.ini';
 const TOKEN_STORAGE_KEY = 'github_pat';
 let fileSha = null;
