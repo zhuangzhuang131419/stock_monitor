@@ -391,4 +391,72 @@ function updateStatus(message, isError = false) {
     statusMsg.style.display = 'block';
 }
 
+async function loadInitialSummary() {
+    // 构造指向 GitHub 仓库中原始文件的 URL
+    // 注意：这要求您的仓库是公开的
+    const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+    const valueChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_value_chart.png`;
+    const pieChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_pie_chart.png`;
+
+    const totalValueDisplay = document.getElementById('total-value-display');
+    const valueChartImg = document.getElementById('value-chart-img');
+    const pieChartImg = document.getElementById('pie-chart-img');
+
+    // 隐藏图片，直到成功加载后再显示，避免出现损坏的图标
+    valueChartImg.style.display = 'none';
+    pieChartImg.style.display = 'none';
+
+    valueChartImg.onload = () => { valueChartImg.style.display = 'block'; };
+    pieChartImg.onload = () => { pieChartImg.style.display = 'block'; };
+
+    // 为 URL 添加时间戳，以绕过浏览器缓存，确保每次都显示最新的文件
+    valueChartImg.src = `${valueChartUrl}?t=${new Date().getTime()}`;
+    pieChartImg.src = `${pieChartUrl}?t=${new Date().getTime()}`;
+
+    try {
+        // 为 CSV 文件也添加时间戳，获取最新数据
+        const response = await fetch(`${csvUrl}?t=${new Date().getTime()}`);
+        if (!response.ok) {
+            throw new Error(`无法加载 CSV 文件: ${response.statusText}`);
+        }
+        const csvText = await response.text();
+        const lines = csvText.trim().split('\n');
+
+        if (lines.length < 2) {
+            throw new Error('CSV 文件内容不正确或为空。');
+        }
+
+        const headers = lines[0].split(',');
+        const lastDataLine = lines[lines.length - 1].split(',');
+        const totalValueIndex = headers.indexOf('total_value');
+
+        if (totalValueIndex === -1) {
+            throw new Error('在 CSV 文件中未找到 "total_value" 列。');
+        }
+
+        const latestTotalValue = parseFloat(lastDataLine[totalValueIndex]);
+        if (isNaN(latestTotalValue)) {
+            throw new Error('最新的 "total_value" 不是一个有效的数字。');
+        }
+
+        // 将数字格式化为带千位分隔符和两位小数的货币样式
+        const formattedValue = latestTotalValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+
+        totalValueDisplay.textContent = `总资产：$${formattedValue}`;
+
+    } catch (error) {
+        console.error('加载资产概览失败:', error);
+        totalValueDisplay.textContent = '总资产：加载失败';
+        totalValueDisplay.style.color = 'red';
+    }
+}
+
+// 当页面 HTML 内容完全加载后，自动执行 loadInitialSummary 函数
+document.addEventListener('DOMContentLoaded', () => {
+    loadInitialSummary();
+});
+
 // --- 脚本结束 ---
