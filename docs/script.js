@@ -54,6 +54,10 @@ function setupEventListeners() {
     document.getElementById('run-workflow-btn-summary').addEventListener('click', requestRunWorkflow);
     document.getElementById('save-btn-positions').addEventListener('click', savePortfolio);
     document.getElementById('save-btn-settings').addEventListener('click', savePortfolio);
+
+    // ========== 这里是新增的事件监听 ==========
+    document.getElementById('force-refresh-btn').addEventListener('click', forceRefreshPage);
+    // =======================================
 }
 
 // --- Tab 与弹窗管理 ---
@@ -117,11 +121,10 @@ async function handleTokenConfirm() {
 
         displayPortfolio(originalIniLines);
 
-        // 优化点 2: 修复授权后不能自动切换 Tab 的问题
-        const tabToSwitch = pendingTabSwitch; // 先把要切换的目标存起来
-        hideTokenModal(); // 再关闭弹窗（这个操作会清空 pendingTabSwitch）
+        const tabToSwitch = pendingTabSwitch;
+        hideTokenModal();
         if (tabToSwitch) {
-            switchTab(tabToSwitch); // 切换到之前存储的目标 Tab
+            switchTab(tabToSwitch);
         }
     } catch (error) {
         console.error(error);
@@ -137,13 +140,6 @@ async function savePortfolio() {
 
     const activePanelKey = panels.positions.classList.contains('active') ? 'positions' : 'settings';
     updateStatus('正在验证并保存...', false, activePanelKey);
-
-    // ... (验证逻辑未改变)
-    let isValid = true;
-    const errorMessages = [];
-    document.querySelectorAll('input.invalid, select.invalid').forEach(el => el.classList.remove('invalid'));
-    const sections = document.querySelectorAll(`#${activePanelKey}-panel .portfolio-section`);
-    // ... (后续验证逻辑与之前版本相同)
 
     const newContent = buildIniStringFromUI();
     const newContentBase64 = btoa(unescape(encodeURIComponent(newContent)));
@@ -168,7 +164,7 @@ async function savePortfolio() {
 async function requestRunWorkflow() {
     if (!token) {
         showTokenModal('需要授权才能启动云端分析。');
-        pendingTabSwitch = 'summary'; // 留在当前页
+        pendingTabSwitch = 'summary';
         return;
     }
     runWorkflow();
@@ -205,11 +201,9 @@ function displayPortfolio(lines) {
             sectionDiv.className = 'portfolio-section';
             sectionDiv.innerHTML = `<h3>${currentSection}</h3>`;
 
-            // 优化点 3: 定义哪些 section 属于“仓位更新”
             const positionSections = ['Portfolio', 'OptionsPortfolio', 'Cash'];
             const targetEditor = positionSections.includes(currentSection) ? editors.positions : editors.settings;
 
-            // 只为可以动态增加的 section 添加“新增”按钮
             if (['Portfolio', 'OptionsPortfolio'].includes(currentSection)) {
                 const addBtn = document.createElement('button');
                 addBtn.textContent = '＋ 新增一行';
@@ -220,13 +214,11 @@ function displayPortfolio(lines) {
             targetEditor.appendChild(sectionDiv);
 
         } else if (currentSection && processedLine.includes('=')) {
-            // 优化点 3: 确保从正确的父面板（仓位/设置）中查找 section
             const positionSections = ['Portfolio', 'OptionsPortfolio', 'Cash'];
             const parentEditor = positionSections.includes(currentSection) ? editors.positions : editors.settings;
             const sectionDiv = Array.from(parentEditor.querySelectorAll('.portfolio-section h3')).find(h3 => h3.textContent === currentSection)?.parentElement;
             if (!sectionDiv) return;
 
-            // --- 此处开始的渲染逻辑未改变 ---
             const [key, value] = processedLine.split('=').map(s => s.trim());
             if (!key || typeof value === 'undefined') return;
             let itemDiv;
@@ -269,7 +261,7 @@ function displayPortfolio(lines) {
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = '删除'; removeBtn.className = 'remove-btn'; removeBtn.onclick = () => itemDiv.remove();
                 itemDiv.append(keyInput, valueInput, removeBtn);
-            } else { // Cash 和其他设置里的项会进入这里
+            } else {
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item-static';
                 const label = document.createElement('label');
@@ -291,7 +283,6 @@ function updateStatus(message, isError = false, panelKey) {
     target.style.display = message ? 'block' : 'none';
 }
 
-// --- 辅助函数 (大部分与之前版本相同) ---
 function getRepoInfoFromURL() {
     const hostname = window.location.hostname;
     const pathParts = window.location.pathname.split('/').filter(Boolean);
@@ -327,16 +318,10 @@ async function loadInitialSummary() {
         const csvText = await response.text();
         const lines = csvText.trim().split('\n');
 
-        // 必须至少有表头和一行数据
         if (lines.length < 2) throw new Error('CSV 文件内容不正确。');
 
         const headers = lines[0].split(',');
-
-        // --- 核心修正 ---
-        // 因为数据是倒序的，所以最新的数据在表头下面的第一行，即 lines[1]
         const latestDataLine = lines[1].split(',');
-        // --- 修正结束 ---
-
         const totalValueIndex = headers.indexOf('total_value');
         const dateIndex = headers.indexOf('date');
 
@@ -347,8 +332,6 @@ async function loadInitialSummary() {
         if (isNaN(latestTotalValue)) throw new Error('最新的 "total_value" 无效。');
 
         totalValueDisplay.textContent = `总资产：$${latestTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-        // 从最新的数据行中获取日期
         lastUpdatedTime.textContent = latestDataLine[dateIndex];
 
     } catch (error) {
@@ -358,7 +341,6 @@ async function loadInitialSummary() {
     }
 }
 
-// --- createOptionRowUI, addNewRow, buildIniStringFromUI 函数与之前版本完全相同 ---
 function createOptionRowUI(ticker = '', date = '', strike = '', type = 'CALL', quantity = '') {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'option-item-row';
@@ -488,3 +470,19 @@ function buildIniStringFromUI() {
     }
     return tempLines.join('\n');
 }
+
+// ========== 这里是新增的函数 ==========
+/**
+ * 强制刷新页面，通过添加时间戳绕过微信等环境的缓存
+ */
+function forceRefreshPage() {
+    // 获取当前页面的基本路径，不包含任何查询参数或哈希
+    const baseUrl = window.location.origin + window.location.pathname;
+
+    // 构建一个带有新时间戳的 URL
+    const newUrl = `${baseUrl}?t=${new Date().getTime()}`;
+
+    // 跳转到新 URL，强制浏览器重新加载
+    window.location.href = newUrl;
+}
+// ===================================
