@@ -19,7 +19,7 @@ jobs:
     # 在一个最新的 Ubuntu 虚拟服务器上运行
     runs-on: ubuntu-latest
 
-    # <<< 新增内容：授予工作流写权限
+    # 授予工作流写权限，以便将文件提交回仓库
     permissions:
       contents: write
 
@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      # ✅ 第3步：安装脚本运行所需的 Python 库（从 requirements.txt 安装）
+      # 第3步：安装脚本运行所需的 Python 库
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -45,8 +45,8 @@ jobs:
             pip install requests pandas matplotlib numpy yfinance
           fi
 
-      # 第4步：运行主脚本（新增 API key 环境变量判断）
-      - name: Run main script
+      # 第4步：运行主分析和收益计算脚本
+      - name: Run main and return calculation scripts
         env:
           ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
         run: |
@@ -66,13 +66,18 @@ jobs:
 
           # 运行主程序
           python main.py
+          
+          # <<< 新增：运行收益率计算脚本 >>>
+          echo "=== Running calculate_return.py ==="
+          python calculate_return.py
 
       # 第5步：将新生成或更新的文件提交回您的代码仓库
       - name: Commit updated files
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png
+          # <<< 修改：在 git add 命令中加入 portfolio_return.json >>>
+          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json
           # 检查是否有文件被修改，如果有，才执行提交和推送
-          git diff --staged --quiet || git commit -m "📊 Automated data and chart update"
+          git diff --staged --quiet || git commit -m "📊 Automated data, charts, and returns update"
           git push
