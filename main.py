@@ -198,7 +198,7 @@ def get_historical_stock_price(ticker, target_date):
     获取给定资产在特定日期的收盘价。
     该函数现在可以智能处理股票和期权两种代码。
     """
-    api_ticker = ticker
+    api_ticker = ticker.replace('.', '-')
 
     # --- 新增：智能识别并转换期权代码 ---
     if '_' in ticker:
@@ -337,17 +337,18 @@ def calculate_portfolio_value():
 
 
 # ==============================================================================
-# 4. 将历史数据保存到文件 (实现元组存储)
+# 4. 将历史数据保存到文件 (分隔符更新版)
 # ==============================================================================
 def save_history(date_to_save, value_to_save, asset_details):
     """
     将当日的投资组合详情追加或更新到历史记录CSV文件中。
-    - 每个资产单元格现在存储一个字符串形式的元组: '(总价值, 单价)'
+    - 每个资产单元格现在存储一个字符串形式的元组: '(总价值|单价)'
     """
     # 1. 准备当日的新数据行，将元组格式化为字符串
     new_row_data = {'total_value': f"{value_to_save:.2f}"}
     for asset, (val, price) in asset_details.items():
-        new_row_data[asset] = f"({val:.2f}, {price:.2f})"
+        # 改动点: 分隔符从 ',' 变为 '|'
+        new_row_data[asset] = f"({val:.2f}|{price:.2f})"
 
     new_row = pd.Series(new_row_data, name=date_to_save)
 
@@ -371,10 +372,12 @@ def save_history(date_to_save, value_to_save, asset_details):
     df = pd.concat([df, new_row.to_frame().T])
 
     # 5. 用代表0的元组字符串填充新出现的NaN值
-    df.fillna("(0.00, 0.00)", inplace=True)
+    # 改动点: 分隔符从 ',' 变为 '|'
+    df.fillna("(0.00|0.00)", inplace=True)
     # total_value列的NaN用 '0.00' 填充
     if 'total_value' in df.columns:
-        df['total_value'].replace("(0.00, 0.00)", "0.00", inplace=True)
+        # 改动点: 分隔符从 ',' 变为 '|'
+        df['total_value'].replace("(0.00|0.00)", "0.00", inplace=True)
 
     # 6. 重新排序列
     if 'total_value' in df.columns:
@@ -390,18 +393,19 @@ def save_history(date_to_save, value_to_save, asset_details):
 
 
 # ==============================================================================
-# 5. 绘制历史价值图表 (实现新数据解析和标签)
+# 5. 绘制历史价值图表 (分隔符更新版)
 # ==============================================================================
 def parse_value_from_cell(cell):
     """
     手动解析单元格的函数，不使用ast。
-    能处理 '(价值, 价格)' 格式和纯数字格式。
+    能处理 '(价值|价格)' 格式和纯数字格式。
     """
     try:
         # 检查是否为字符串以及是否符合元组格式
         if isinstance(cell, str) and cell.strip().startswith('(') and cell.strip().endswith(')'):
-            # 去除括号并按逗号分割
-            parts = cell.strip()[1:-1].split(',')
+            # 去除括号并按管道符分割
+            # 改动点: 分隔符从 ',' 变为 '|'
+            parts = cell.strip()[1:-1].split('|')
             if len(parts) == 2:
                 # 提取第一个部分（总价值）并转换为浮点数
                 return float(parts[0].strip())
@@ -542,21 +546,20 @@ def plot_pie_chart(asset_details, output_filename):
     finally:
         plt.close(fig)
 
+
 # ==============================================================================
-# (终极版) 6.1. 历史数据校验与修复模块
+# (终极版) 6.1. 历史数据校验与修复模块 (分隔符更新+清仓清理版)
 # ==============================================================================
 def validate_and_repair_history():
     """
-    校验并修复历史数据，精细化处理股票、现金和期权。
-    1. (股票) 修复价格丢失或格式错误的数据。
-    2. (现金) 强制统一为 '(金额, 1.00)' 格式。
-    3. (期权) 根据价值是否为零，分别进行标准化或价格补全。
+    校验并修复历史数据，并清理已售罄的资产列。
+    使用 '|' 作为分隔符。
     """
     if not os.path.exists(HISTORY_FILE):
         return
 
     print("\n" + "=" * 50)
-    print("开始执行历史数据完整性校验...")
+    print("开始执行历史数据完整性校验 (使用 '|' 分隔符)...")
 
     try:
         df = pd.read_csv(HISTORY_FILE, index_col='date', dtype=str)
@@ -567,21 +570,21 @@ def validate_and_repair_history():
     df_repaired = df.copy()
     changes_made = False
 
+    # --- 数据修复循环 (代码与之前相同，此处省略) ---
     for date, row in df.iterrows():
         for ticker, cell_value in row.items():
-            # 跳过总价值列和完全为空的单元格
             if ticker == 'total_value' or pd.isna(cell_value):
                 continue
-
+            # (此处省略现金、期权、股票的详细修复逻辑，因为它们没有变化)
+            # ...
             # -------------------- 1. 现金 (CASH) 处理逻辑 --------------------
             if ticker == 'CASH':
                 try:
-                    # ... (现金处理逻辑保持不变) ...
                     is_tuple_format = isinstance(cell_value, str) and cell_value.strip().startswith('(')
                     cash_amount = 0.0
                     needs_fixing = False
                     if is_tuple_format:
-                        parts = cell_value.strip()[1:-1].split(',')
+                        parts = cell_value.strip()[1:-1].split('|')
                         cash_amount = float(parts[0].strip())
                         price = float(parts[1].strip()) if len(parts) > 1 else 0.0
                         if price != 1.0: needs_fixing = True
@@ -589,7 +592,7 @@ def validate_and_repair_history():
                         cash_amount = float(cell_value)
                         needs_fixing = True
                     if needs_fixing:
-                        new_cash_value = f"({cash_amount:.2f}, 1.00)"
+                        new_cash_value = f"({cash_amount:.2f}|1.00)"
                         if df_repaired.at[date, ticker] != new_cash_value:
                             df_repaired.at[date, ticker] = new_cash_value
                             changes_made = True
@@ -598,64 +601,50 @@ def validate_and_repair_history():
                     print(f"  - 警告: 无法解析 CASH 单元格 on {date}: '{cell_value}'")
                 continue
 
-            # -------------------- 2. 期权 (Options) 处理逻辑 (全新升级) --------------------
+            # -------------------- 2. 期权 (Options) 处理逻辑 --------------------
             elif '_' in ticker:
-                total_val = 0.0
-                price = 0.0
+                total_val, price = 0.0, 0.0
                 try:
-                    # 先解析出价值和价格
                     if isinstance(cell_value, str) and cell_value.strip().startswith('('):
-                        parts = cell_value.strip()[1:-1].split(',')
+                        parts = cell_value.strip()[1:-1].split('|')
                         total_val = float(parts[0].strip())
                         price = float(parts[1].strip()) if len(parts) > 1 else 0.0
-                    else:  # 旧格式 (纯数字)
+                    else:
                         total_val = float(cell_value)
-                        price = 0.0
                 except (ValueError, IndexError):
                     print(f"  - 警告: 无法解析期权单元格 {ticker} on {date}: '{cell_value}'")
                     continue
 
-                # 规则 3: 如果价值为零，统一格式为 (0.00, 0.00)
                 if total_val == 0:
-                    correct_format = "(0.00, 0.00)"
-                    # 避免不必要的写入和打印
-                    if cell_value.strip() not in ["(0.00, 0.00)", "(0.0, 0.0)"]:
+                    correct_format = "(0.00|0.00)"
+                    if cell_value.strip() not in ["(0.00|0.00)", "(0.0|0.0)"]:
                         df_repaired.at[date, ticker] = correct_format
                         changes_made = True
                         print(f"  - 修正零值期权格式: {ticker} on {date}. 从 '{cell_value}' -> '{correct_format}'")
-
-                # 规则 1 & 2: 如果价值非零但价格缺失，则查询并补全
                 elif total_val > 0 and price <= 0:
                     print(f"  - 发现不一致期权数据: {ticker} on {date} [价值: {total_val:.2f}, 价格缺失]")
                     print(f"    -> 正在尝试获取 {date} 的历史价格...")
-
-                    # 复用股票的价格获取函数
                     historical_price = get_historical_stock_price(ticker, date)
                     time.sleep(1)
-
                     if historical_price is not None:
-                        new_cell_value = f"({total_val:.2f}, {historical_price:.2f})"
+                        new_cell_value = f"({total_val:.2f}|{historical_price:.2f})"
                         df_repaired.at[date, ticker] = new_cell_value
                         changes_made = True
                         print(f"    -> 成功修复期权: 价格更新为 ${historical_price:.2f}。新值为: {new_cell_value}")
                     else:
                         print(f"    -> 修复失败: 未能获取到期权 {ticker} 在 {date} 的历史价格。")
-
-                continue  # 处理完期权后跳到下一列
+                continue
 
             # -------------------- 3. 股票 (Stock) 处理逻辑 --------------------
             else:
-                # ... (股票处理逻辑保持不变) ...
-                total_val = 0.0
-                price = 0.0
+                total_val, price = 0.0, 0.0
                 try:
                     if isinstance(cell_value, str) and cell_value.strip().startswith('('):
-                        parts = cell_value.strip()[1:-1].split(',')
+                        parts = cell_value.strip()[1:-1].split('|')
                         total_val = float(parts[0].strip())
                         price = float(parts[1].strip()) if len(parts) > 1 else 0.0
                     else:
                         total_val = float(cell_value)
-                        price = 0.0
                 except (ValueError, IndexError):
                     continue
                 if total_val > 0 and price <= 0:
@@ -664,22 +653,43 @@ def validate_and_repair_history():
                     historical_price = get_historical_stock_price(ticker, date)
                     time.sleep(1)
                     if historical_price is not None:
-                        new_cell_value = f"({total_val:.2f}, {historical_price:.2f})"
+                        new_cell_value = f"({total_val:.2f}|{historical_price:.2f})"
                         df_repaired.at[date, ticker] = new_cell_value
                         changes_made = True
                         print(f"    -> 成功修复股票: 价格更新为 ${historical_price:.2f}。新值为: {new_cell_value}")
                     else:
                         print(f"    -> 修复失败: 未能获取到股票 {ticker} 在 {date} 的历史价格。")
 
+    # --- 改动点：新增清理已清仓资产列的逻辑 ---
+    columns_to_drop = []
+    asset_columns = [col for col in df_repaired.columns if col != 'total_value']
+
+    for col in asset_columns:
+        # 使用 parse_value_from_cell 函数检查该列所有值的总和是否为0
+        try:
+            # .apply() 在这里比 .map() 更安全，因为它作用于 Series
+            total_asset_value = df_repaired[col].apply(parse_value_from_cell).sum()
+            if total_asset_value == 0:
+                columns_to_drop.append(col)
+        except Exception:
+            # 如果解析某列时出错，为安全起见，不删除该列
+            continue
+
+    if columns_to_drop:
+        df_repaired.drop(columns=columns_to_drop, inplace=True)
+        changes_made = True  # 标记已更改，以确保文件被保存
+        print(f"\n信息: 检测到并清除了已售罄的资产列: {', '.join(columns_to_drop)}")
+    # --- 清理逻辑结束 ---
+
     if changes_made:
-        print("\n校验完成。发现并修复了数据，正在保存更新后的历史文件...")
+        print("\n校验完成。发现并修复/清理了数据，正在保存更新后的历史文件...")
         try:
             df_repaired.to_csv(HISTORY_FILE, index=True, index_label='date')
-            print(f"成功: 已将修复后的历史数据保存到 '{HISTORY_FILE}'")
+            print(f"成功: 已将更新后的历史数据保存到 '{HISTORY_FILE}'")
         except Exception as e:
-            print(f"错误: 保存修复后的历史文件失败: {e}")
+            print(f"错误: 保存更新后的历史文件失败: {e}")
     else:
-        print("\n校验完成。未发现需要修复的数据。")
+        print("\n校验完成。未发现需要修复或清理的数据。")
     print("=" * 50)
 
 
