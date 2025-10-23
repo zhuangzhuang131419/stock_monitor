@@ -90,12 +90,11 @@ portfolio_pie_chart.png
 ## 🧩 requirements.txt
 
 ```txt
-requests>=2.31.0
-pandas>=2.2.0
-matplotlib>=3.7.0
-numpy>=1.24.0
-yfinance>=0.2.36
-urllib3>=2.0.0
+requests
+pandas
+matplotlib
+numpy
+yfinance
 ```
 
 ---
@@ -108,60 +107,85 @@ urllib3>=2.0.0
 `.github/workflows/stock-monitor.yml` 示例：
 
 ```yaml
-name: Stock Monitor
+# 工作流名称
+name: Run Python Script
 
+# 工作流的触发条件
 on:
+  # 1. 允许您在 GitHub 页面的 "Actions" 标签下手动点击运行
   workflow_dispatch:
+  
+  # 2. 定时触发 (使用 Cron 语法)
   schedule:
-    - cron: '0 22 * * 1-5'  # 每个工作日 22:00 UTC 运行
+    # 工作日 22:00 UTC 运行。
+    # - 标准时间期间 (约11月-3月): 对应美东下午 5:00 (UTC-5)
+    # - 夏令时期间 (约3月-11月): 对应美东下午 6:00 (UTC-4)
+    - cron: '0 22 * * 1-5'
 
+# 定义具体要执行的任务
 jobs:
-  run-monitor:
+  build-and-commit:
+    # 在一个最新的 Ubuntu 虚拟服务器上运行
     runs-on: ubuntu-latest
+
+    # <<< 新增内容：授予工作流写权限
     permissions:
       contents: write
 
     steps:
+      # 第1步：将您的代码仓库下载到虚拟服务器上
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 第2步：设置 Python 3.10 环境
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # ✅ 第3步：安装脚本运行所需的 Python 库（从 requirements.txt 安装）
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "⚠️ requirements.txt not found, installing basic dependencies..."
+            pip install requests pandas matplotlib numpy yfinance
+          fi
 
-      - name: Run stock monitor
+      # 第4步：运行主脚本（新增 API key 环境变量判断）
+      - name: Run main script
         env:
           ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
         run: |
-          echo "=== Running stock monitor ==="
-
-          # 如果 secrets 中设置了 ALPHA_API_KEY，则更新 config.ini
+          echo "=== Running main.py ==="
+          
+          # 如果设置了 GitHub Secrets，则替换 config.ini 中的 API Key
           if [ -n "${ALPHA_API_KEY}" ]; then
-            echo "✅ Using ALPHA_API_KEY from secrets"
+            echo "✅ Found ALPHA_API_KEY from secrets. Updating config.ini..."
             if grep -q "^api_key" config.ini; then
               sed -i "s/^api_key = .*/api_key = ${ALPHA_API_KEY}/" config.ini
             else
               echo "api_key = ${ALPHA_API_KEY}" >> config.ini
             fi
           else
-            echo "⚠️ ALPHA_API_KEY not found. Using config.ini setting."
+            echo "⚠️ Warning: ALPHA_API_KEY not set. Using existing key in config.ini."
           fi
 
+          # 运行主程序
           python main.py
 
-      - name: Commit updated results
+      # 第5步：将新生成或更新的文件提交回您的代码仓库
+      - name: Commit updated files
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png
+          # 检查是否有文件被修改，如果有，才执行提交和推送
           git diff --staged --quiet || git commit -m "📊 Automated data and chart update"
           git push
+
 ```
 
 ---
