@@ -135,13 +135,13 @@ datetime
   - 自动加载最新的 CSV 数据。
 
 - **仓位更新页**  
-  - 可编辑 `[Portfolio]` 与 `[OptionsPortfolio]`；
+  - 可编辑 `[Portfolio]` ， `[OptionsPortfolio]` 和 `[Cash]`；
   - 支持动态添加、删除项目；
-  - 自动保存为 `config.ini`。
+  - 点击保存仓位保存到 `config.ini`。
 
 - **其他设置页**  
-  - 显示 `[Cash]` 及其他全局配置；
-  - 亦可保存修改。
+  - 显示其他全局配置；
+  - 亦可保存修改到 `config.ini`。
 
 - **Token 授权弹窗**  
   - 验证用户 GitHub Token；
