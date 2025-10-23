@@ -202,7 +202,8 @@ function displayPortfolio(iniContent) {
                 const addBtn = document.createElement('button');
                 addBtn.textContent = '＋ 新增一行';
                 addBtn.className = 'add-btn';
-                addBtn.onclick = () => addNewRow(sectionDiv);
+                const correctSectionDiv = sectionDiv;
+                addBtn.onclick = () => addNewRow(correctSectionDiv);
                 sectionDiv.appendChild(addBtn);
             }
         } else if (processedLine.includes('=') && sectionDiv) {
