@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投资组合编辑器</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 20px auto; padding: 0 15px; }
+        h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #28a745; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+        button:hover { background-color: #218838; }
+        #run-workflow-btn { background-color: #007bff; }
+        #run-workflow-btn:hover { background-color: #0069d9; }
+        #status-msg { margin-top: 15px; padding: 10px; border-radius: 4px; display: none; }
+        .status-success { background-color: #e6ffed; border: 1px solid #b7ebc9; color: #1f7c3c; }
+        .status-error { background-color: #ffebe6; border: 1px solid #ffc2b3; color: #c82300; }
+        .portfolio-section { margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+        .portfolio-section h3 { margin-top: 0; }
+        .portfolio-item { display: flex; align-items: center; margin-bottom: 8px; }
+        .portfolio-item label { flex: 1; }
+        .portfolio-item input { flex: 2; margin-bottom: 0; }
+    </style>
+</head>
+<body>
+
+    <h1>投资组合编辑器</h1>
+    <p>一个运行在GitHub Pages上的无服务器编辑器，用于修改仓库中的 `config.ini` 文件并触发GitHub Actions。</p>
+
+    <h2>1. 授权</h2>
+    <div>
+        <label for="github-token">GitHub Personal Access Token:</label>
+        <input type="password" id="github-token" placeholder="粘贴拥有 read/write contents 和 actions 权限的PAT">
+        <small>Token仅用于本次会话，关闭页面即失效，不会被保存。</small>
+    </div>
+
+    <hr>
+
+    <h2>2. 操作</h2>
+    <button id="load-btn">加载当前持仓</button>
+    <button id="save-btn">保存并提交到GitHub</button>
+    <button id="run-workflow-btn">启动云端分析</button>
+    <div id="status-msg"></div>
+
+    <hr>
+
+    <h2>3. 编辑持仓</h2>
+    <div id="portfolio-editor">
+        <p>请先点击 "加载当前持仓" 来编辑。</p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
