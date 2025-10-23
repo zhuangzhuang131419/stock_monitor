@@ -1,39 +1,69 @@
-# 📈 stock_monitor
+# 投资组合自动化分析系统
 
-## 📘 简介
-`stock_monitor` 是一个基于 **Python** 的投资组合监控与可视化工具。  
-支持两种数据源：
-- **yfinance**（默认）—— 可直接从雅虎财经获取数据，也可配置代理；
-- **Alpha Vantage** —— 当网络环境不适合 yfinance 时可切换使用（需 API Key）。
+本项目提供一个完整的自动化投资组合分析与展示解决方案，包含：
 
-主要功能包括：
-- 从配置文件中读取持仓与参数；
-- 自动获取股票和期权价格（支持代理与重试机制）；
-- 计算投资组合总价值；
-- 保存每日历史记录；
-- 生成趋势图与当日仓位饼图；
-- 支持现金余额记录与统计。
+- 🧠 **Python 后端**：执行数据分析、生成图表、输出结果文件；
+- ☁️ **GitHub Actions 自动化工作流**：实现云端定时或手动触发分析；
+- 🌐 **前端仪表盘（HTML/CSS/JS）**：可视化展示资产数据、直接在线修改配置；
+- 📊 **结果文件自动上传与可视化**：包括总资产曲线图、分布饼图、历史明细表等。
 
 ---
 
-## ⚙️ 安装与配置
+## 🧩 项目结构
 
-### 1. 克隆仓库
-```bash
-git clone https://github.com/cli117/stock_monitor.git
-cd stock_monitor
+```
+├── .github/
+│   └── workflows/
+│       └── main.yml              # 云端自动分析主流程
+├── config.ini                    # 投资组合与系统配置
+├── portfolio_details_history.csv # 历史资产明细（自动更新）
+├── portfolio_value_chart.png     # 总资产曲线图（自动生成）
+├── portfolio_pie_chart.png       # 资产分布图（自动生成）
+├── requirements.txt              # Python 依赖
+├── analyze_portfolio.py          # 主分析脚本
+├── index.html                    # 前端仪表盘入口
+├── style.css                     # 前端样式文件
+├── script.js                     # 前端逻辑与交互
+└── README.md                     # 项目说明文档（即本文档）
 ```
 
-### 2. 安装依赖
+---
+
+## 🚀 核心逻辑流程（原逻辑保持不变）
+
+1. **配置加载**
+   - 从 `config.ini` 读取投资组合、现金、期权等信息；
+   - 可包含数据源设定（如雅虎财经、聚宽、雪球等）。
+
+2. **数据抓取与分析**
+   - 自动获取股票与期权的实时或历史数据；
+   - 计算总资产、收益率、权重占比等关键指标；
+   - 输出详细表格与图表。
+
+3. **结果导出**
+   - 输出以下文件至仓库根目录：
+     - `portfolio_details_history.csv`
+     - `portfolio_value_chart.png`
+     - `portfolio_pie_chart.png`
+
+4. **GitHub Actions 自动执行**
+   - 工作流文件 `.github/workflows/main.yml` 控制执行；
+   - 可设置手动触发（workflow_dispatch）或定时运行（schedule）；
+   - 分析完成后自动提交并推送结果文件。
+
+---
+
+## 📦 安装依赖（Python）
+
+本项目依赖于 Python 3.9+，使用以下命令安装依赖：
+
 ```bash
 pip install -r requirements.txt
 ```
 
----
+**requirements.txt 内容：**
 
-## 🧩 requirements.txt
-
-```txt
+```
 requests
 pandas
 matplotlib
@@ -45,198 +75,127 @@ datetime
 
 ---
 
-## 🧾 配置文件说明 (`config.ini`)
+## ☁️ 部署与自动化执行
 
-程序启动时会读取根目录下的 `config.ini`。  
-若文件不存在或缺失关键项，程序将报错退出（不会自动生成模板）。
-
-示例配置如下：
-
-```ini
-[General]
-# 数据源: 0 = yfinance (默认), 1 = Alpha Vantage
-data_source = 0
-api_key = YOUR_API_KEY
-
-# 输出文件设置
-history_file = portfolio_details_history.csv
-plot_file = portfolio_value_chart.png
-pie_chart_file = portfolio_pie_chart.png
-
-[Proxy]
-# 当网络不支持 yfinance 访问时启用代理
-ip = 127.0.0.1
-port = 7890
-
-[Portfolio]
-# 股票持仓配置：Ticker = 数量
-VOO = 46.9266
-MCD = 134.2509
-ASML = 77.3702
-GOOGL = 861
-V = 149
-ADBE = 130
-BRK.B = 122
-
-[OptionsPortfolio]
-# 可选：期权持仓（支持负数表示卖出）
-# 格式: UnderlyingTicker_YYYY-MM-DD_StrikePrice_Type = Quantity
-# NVDA_2026-01-16_130_PUT = 5
-# AAPL_2025-11-28_200_CALL = -2
-
-[Cash]
-# 现金余额（视为资产的一部分）
-amount = 0.00
-
-[Settings]
-# 获取数据失败时的重试设置
-max_retries = 10
-retry_delay_seconds = 10
-```
+1. 将项目 Fork 或 Clone 到你自己的 GitHub 仓库；
+2. 在 `.github/workflows/main.yml` 中根据需要修改：
+   - 调度频率（`cron`）
+   - 分析脚本路径
+   - 输出文件名
+3. 提交并推送后，GitHub Actions 会定时自动运行；
+4. 运行完成后，在仓库中可查看最新分析结果。
 
 ---
 
-## 🚀 运行程序
+## 🌐 前端可视化仪表盘
 
-```bash
-python main.py
-```
+> **全新特性：前端可视化与云端联动**
 
-执行流程：
-1. 读取配置；
-2. 连接指定数据源（yfinance 或 Alpha Vantage）；
-3. 获取股票与期权价格；
-4. 计算总市值；
-5. 更新历史记录；
-6. 绘制趋势图和仓位饼图。
+项目现已支持通过 **GitHub Pages** 提供在线仪表盘界面，可实现以下功能：
 
-输出结果：
-```
-portfolio_details_history.csv
-portfolio_value_chart.png
-portfolio_pie_chart.png
-```
+- 查看最新的资产总览、历史曲线与分布饼图；
+- 直接在线编辑 `config.ini`（仓位与设置）；
+- 一键保存修改；
+- 一键触发 GitHub Actions 云端重新分析。
 
 ---
 
-## 📊 图表说明
+### ✅ 部署步骤
 
-- **趋势图 (`portfolio_value_chart.png`)**
-  - 使用堆叠图展示各资产随时间变化；
-  - 黑色虚线表示总资产变化趋势。
+1. 确认以下文件在仓库docs文件夹（默认位置即可）：
+   ```
+   index.html
+   style.css
+   script.js
+   ```
 
-- **仓位饼图 (`portfolio_pie_chart.png`)**
-  - 仅显示正持仓（价值 > 0）的比例；
-  - 中心留白以便更清晰展示各资产占比。
+2. 在 GitHub 仓库中启用 Pages：
+   - 打开仓库 → Settings → Pages；
+   - 选择 **Branch: main / (docs)**；
+   - 保存后访问 `https://<你的用户名>.github.io/<仓库名>/`。
 
----
+3. 每次打开网页后：
+   - 首次访问时需输入你的 **Personal Access Token (PAT)**；
+   - PAT 需具备：
+     - `repo` 权限（读写 contents）
+     - `workflow` 权限（运行 Actions）
 
-## 🧠 高级功能
-
-### 🧩 代理访问
-当网络环境无法访问 `yfinance` 时：
-- 在 `[Proxy]` 段中填写代理 IP 和端口；
-- 程序会自动在直连失败后切换到代理模式重新获取数据。
-
-### 🔑 Alpha Vantage 模式
-若设置：
-```ini
-data_source = 1
-```
-则会使用 Alpha Vantage 获取数据。  
-此时必须提供有效的：
-```ini
-api_key = YOUR_API_KEY
-```
-否则程序将直接退出。
-
-### 💰 现金资产支持
-在 `[Cash]` 段中填写金额，程序会自动将现金计入资产总值并在历史记录中显示。
+4. 本次访问可：
+   - 在 “资产概览” 标签页查看图表与总资产；
+   - 在 “仓位更新” 或 “其他设置” 标签页修改配置；
+   - 点击 “启动云端分析” 直接触发工作流。
 
 ---
 
-## ⚙️ GitHub Actions 自动化运行
+### 🖼️ 页面结构概览
 
-可在 `.github/workflows/stock-monitor.yml` 中配置自动执行脚本。  
-例如：每天美东下午 6 点定时更新数据并自动提交。
+- **资产概览页**  
+  - 显示总资产、趋势图、分布图；
+  - 可一键启动分析；
+  - 自动加载最新的 CSV 数据。
 
-```yaml
-name: Run Python Script
+- **仓位更新页**  
+  - 可编辑 `[Portfolio]` 与 `[OptionsPortfolio]`；
+  - 支持动态添加、删除项目；
+  - 自动保存为 `config.ini`。
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 22 * * 1-5'  # UTC 22:00 => 美东下午 5~6 点
+- **其他设置页**  
+  - 显示 `[Cash]` 及其他全局配置；
+  - 亦可保存修改。
 
-jobs:
-  build-and-commit:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            echo "⚠️ requirements.txt not found, installing minimal dependencies..."
-            pip install requests pandas matplotlib numpy yfinance urllib3
-          fi
-
-      - name: Run main script
-        env:
-          ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
-        run: |
-          echo "=== Running main.py ==="
-          if [ -n "${ALPHA_API_KEY}" ]; then
-            echo "✅ Updating config.ini with ALPHA_API_KEY..."
-            sed -i "s/^api_key = .*/api_key = ${ALPHA_API_KEY}/" config.ini
-          fi
-          python main.py
-
-      - name: Commit updated files
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png
-          git diff --staged --quiet || git commit -m "📊 Automated data and chart update"
-          git push
-```
+- **Token 授权弹窗**  
+  - 验证用户 GitHub Token；
+  - 成功后自动加载配置。
 
 ---
 
-## ⚠️ 注意事项
-- 若 `config.ini` 缺失或格式错误，程序将报错退出；
-- yfinance 默认直连，可配置代理；
-- Alpha Vantage 模式需有效 API Key；
-- 程序不会自动生成配置模板；
-- 建议在 `.gitignore` 中忽略输出文件：
-  ```
-  portfolio_details_history.csv
-  portfolio_value_chart.png
-  portfolio_pie_chart.png
-  ```
+### ⚙️ 文件说明
+
+| 文件 | 作用 |
+|------|------|
+| `index.html` | 仪表盘主页面结构 |
+| `style.css` | 页面样式与布局优化 |
+| `script.js` | 前端交互与 GitHub API 调用逻辑 |
 
 ---
 
-## 🧑‍💻 贡献方式
-欢迎提交改进建议：
-1. Fork 本仓库  
-2. 创建分支 `feature/xxx`  
-3. 修改并提交  
-4. 发起 Pull Request  
+### 🔐 安全提示
+
+- 建议使用 **Fine-grained Personal Access Token**；
+- 仅勾选所需权限（contents、workflows）；
+- 不要公开泄露 Token；
+- Token 仅保存在本地浏览器，不上传至仓库。
 
 ---
 
-## 📄 License
-本项目使用 **MIT 许可证**，详见 [LICENSE](LICENSE)。
+## 🧭 项目目标
+
+该系统旨在实现一键化投资组合分析：
+- 自动抓取数据；
+- 自动计算指标；
+- 自动生成报告；
+- 自动可视化；
+- 自动上传展示。
+
+---
+
+## 🪄 效果预览
+
+> 部署成功后访问 `https://<your-username>.github.io/<your-repo>/`
+
+你将看到一个带有三个标签页的仪表盘：
+
+- 💰 **资产概览**  
+  查看实时更新的总资产曲线和分布饼图。
+
+- 📈 **仓位更新**  
+  可视化编辑投资组合并保存。
+
+- ⚙️ **其他设置**  
+  管理系统参数或附加配置。
+
+---
+
+## 📄 许可证
+
+MIT License
