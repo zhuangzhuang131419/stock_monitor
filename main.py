@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.patheffects as path_effects
 import yfinance as yf
 import urllib3
+from datetime import datetime
 
 # 禁用在代理模式下可能出现的 InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -22,18 +23,21 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def load_config():
     """
     从 config.ini 文件加载所有配置。
+    (V4 - 增加了对行内注释的支持，并指定UTF-8编码)
     """
     config_file = 'config.ini'
     if not os.path.exists(config_file):
         print(f"错误: 配置文件 '{config_file}' 不存在，请先创建。")
         sys.exit()
 
-    config = configparser.ConfigParser()
-    config.read(config_file)
+    # 核心修改：增加了 inline_comment_prefixes=('#', ';') 来识别行内注释
+    config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
+    # 明确使用 utf-8 编码读取，防止中文注释导致问题
+    config.read(config_file, encoding='utf-8')
 
     try:
         # [General] & [Settings]
-        data_source = config.getint('General', 'data_source', fallback=0)  # 默认改为0
+        data_source = config.getint('General', 'data_source', fallback=0)
         api_key = config.get('General', 'api_key', fallback=None)
         history_file = config.get('General', 'history_file')
         plot_file = config.get('General', 'plot_file')
@@ -41,18 +45,51 @@ def load_config():
         max_retries = config.getint('Settings', 'max_retries')
         retry_delay = config.getint('Settings', 'retry_delay_seconds')
 
-        # 当选择 Alpha Vantage 时，检查 API Key
         if data_source == 1 and (not api_key or api_key == 'YOUR_API_KEY_HERE'):
-            print("错误: data_source 设置为 1 (Alpha Vantage)，但未在 config.ini 中提供有效的 api_key。")
+            print("错误: data_source 设置为 1 (Alpha Vantage)，但未提供有效的 api_key。")
             sys.exit()
 
-        # [Portfolio]
+        # [Portfolio] - 股票
         portfolio = []
         for ticker, quantity in config.items('Portfolio'):
             portfolio.append((ticker.upper(), float(quantity)))
-        if not portfolio:
-            print("错误: 配置文件中的 [Portfolio] 部分为空，请至少添加一只股票。")
-            sys.exit()
+
+        # [OptionsPortfolio] - 期权 (此部分逻辑无需再修改)
+        options_portfolio = []
+        if config.has_section('OptionsPortfolio'):
+            for key, quantity_str in config.items('OptionsPortfolio'):
+                try:
+                    parts = key.upper().rsplit('_', 2)
+                    if len(parts) != 3:
+                        print(f"警告: 忽略格式错误的期权键 (无法分离价格和类型): {key}")
+                        continue
+
+                    base, strike_str, opt_type = parts
+
+                    date_parts = base.rsplit('_', 1)
+                    if len(date_parts) != 2:
+                        print(f"警告: 忽略格式错误的期权键 (无法分离股票和日期): {key}")
+                        continue
+
+                    ticker, date_str = date_parts
+
+                    if opt_type not in ['CALL', 'PUT']:
+                        print(f"警告: 忽略类型错误的期权: {key} (类型必须是 CALL 或 PUT)")
+                        continue
+
+                    option_details = {
+                        'key': key.upper(),
+                        'ticker': ticker,
+                        'expiry': date_str,
+                        'strike': float(strike_str),
+                        'type': opt_type,
+                        'quantity': float(quantity_str)  # 现在 quantity_str 会是纯净的数字字符串
+                    }
+                    options_portfolio.append(option_details)
+                except ValueError:
+                    print(f"警告: 无法解析期权 '{key}'。请确保其行权价和右侧的数量值都是纯数字。")
+                except Exception as e:
+                    print(f"警告: 解析期权 '{key}' 时发生未知错误: {e}")
 
         # [Proxy]
         proxy_ip = config.get('Proxy', 'ip', fallback=None)
@@ -63,7 +100,7 @@ def load_config():
             proxy_ip, proxy_port = None, None
 
         return (data_source, api_key, history_file, plot_file, pie_chart_file,
-                max_retries, retry_delay, portfolio, proxy_ip, proxy_port)
+                max_retries, retry_delay, portfolio, options_portfolio, proxy_ip, proxy_port)
 
     except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
         print(f"错误: 配置文件 'config.ini' 格式不正确或缺少必要项: {e}")
@@ -72,7 +109,7 @@ def load_config():
 
 # 在程序开始时加载所有配置
 (DATA_SOURCE, API_KEY, HISTORY_FILE, PLOT_FILE, PIE_CHART_FILE, MAX_RETRIES,
- RETRY_DELAY, portfolio, PROXY_IP, PROXY_PORT) = load_config()
+ RETRY_DELAY, portfolio, options_portfolio, PROXY_IP, PROXY_PORT) = load_config()
 
 
 # ==============================================================================
@@ -153,95 +190,174 @@ def get_stock_price_yfinance(ticker):
             return None
 
 
+def get_option_price_yfinance(ticker, expiry, strike_price, option_type):
+    """
+    使用 yfinance 获取期权价格，并支持直连/代理智能切换。
+    """
+    option_name = f"{ticker} {expiry} {strike_price} {option_type}"
+
+    # --- 模式一: 尝试直接连接 ---
+    try:
+        print(f"  - [yfinance-直连] 正在获取期权 {option_name}...")
+        stock = yf.Ticker(ticker)
+        chain = stock.option_chain(expiry)
+        df = chain.calls if option_type == 'CALL' else chain.puts
+        if df.empty: raise ValueError(f"未找到 {expiry} 的 {option_type} 期权链")
+        contract = df[df['strike'] == strike_price]
+        if contract.empty: raise ValueError(f"未找到行权价为 {strike_price} 的合约")
+        price = contract.iloc[0]['lastPrice']
+        trading_day = datetime.now().strftime('%Y-%m-%d')
+        return price, trading_day
+    except Exception as e:
+        print(f"  - [yfinance-直连] 失败: {e}")
+
+        # --- 模式二: 检查并尝试代理连接 ---
+        if not PROXY_IP or not PROXY_PORT:
+            return None
+
+        print(f"  - [yfinance-代理] 正在通过 {PROXY_IP}:{PROXY_PORT} 尝试...")
+        try:
+            proxies = {'http': f'http://{PROXY_IP}:{PROXY_PORT}', 'https': f'http://{PROXY_IP}:{PROXY_PORT}'}
+            session = requests.Session()
+            session.proxies.update(proxies)
+            session.verify = False
+            stock = yf.Ticker(ticker, session=session)
+            chain = stock.option_chain(expiry)
+            df = chain.calls if option_type == 'CALL' else chain.puts
+            if df.empty: raise ValueError(f"通过代理仍未找到 {expiry} 的 {option_type} 期权链")
+            contract = df[df['strike'] == strike_price]
+            if contract.empty: raise ValueError(f"通过代理仍未找到行权价为 {strike_price} 的合约")
+            price = contract.iloc[0]['lastPrice']
+            trading_day = datetime.now().strftime('%Y-%m-%d')
+            return price, trading_day
+        except Exception as e_proxy:
+            print(f"  - [yfinance-代理] 失败: {e_proxy}")
+            return None
+
+
 # ==============================================================================
 # 3. 计算总价值并打印结果
 # ==============================================================================
 def calculate_portfolio_value():
     total_value = 0.0
-    stock_values = {}
+    asset_values = {}  # 重命名为 asset_values 以包含股票和期权
     portfolio_date = None
 
+    # --- 1. 处理股票 ---
     source_name = "yfinance" if DATA_SOURCE == 0 else "Alpha Vantage"
-    print(f"正在使用 [{source_name}] 获取您的投资组合价值...\n")
-
+    print(f"正在使用 [{source_name}] 获取您的股票价值...\n")
     for ticker, quantity in portfolio:
         result = None
         for attempt in range(MAX_RETRIES):
-            # 根据配置选择调用的函数 (0=yfinance, 1=AlphaVantage)
-            if DATA_SOURCE == 0:
-                result = get_stock_price_yfinance(ticker)
-            else:
-                result = get_stock_price_alphavantage(ticker)
-
-            if result is not None:
-                break
-            else:
-                if attempt < MAX_RETRIES - 1:
-                    print(f"  - 获取 {ticker} 失败。将在 {RETRY_DELAY} 秒后进行第 {attempt + 2}/{MAX_RETRIES} 次重试...")
-                    time.sleep(RETRY_DELAY)
-        if result is not None:
+            get_price_func = get_stock_price_yfinance if DATA_SOURCE == 0 else get_stock_price_alphavantage
+            result = get_price_func(ticker)
+            if result is not None: break
+            if attempt < MAX_RETRIES - 1:
+                print(f"  - 获取 {ticker} 失败。将在 {RETRY_DELAY} 秒后重试...")
+                time.sleep(RETRY_DELAY)
+        if result:
             price, fetched_date = result
-            if portfolio_date is None:
-                portfolio_date = fetched_date
-            elif portfolio_date != fetched_date:
-                print(f"  - 警告: {ticker} 的日期({fetched_date})与组合其他部分({portfolio_date})不一致。")
+            if portfolio_date is None: portfolio_date = fetched_date
             stock_value = price * quantity
             total_value += stock_value
-            stock_values[ticker] = stock_value
-            print(f"  -> 成功: {ticker} {quantity} 股 @ ${price:.2f} = ${stock_value:,.2f} (日期: {fetched_date})")
+            asset_values[ticker] = stock_value
+            print(f"  -> 成功: {ticker} {quantity:g} 股 @ ${price:.2f} = ${stock_value:,.2f}")
         else:
-            stock_values[ticker] = 0
+            asset_values[ticker] = 0
             print(f"  -> 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {ticker} 的价格。")
 
-    print("\n" + "=" * 40)
-    if portfolio_date:
-        print(f"投资组合总价值 (截至 {portfolio_date}): ${total_value:,.2f}")
-    else:
-        print(f"投资组合总价值: ${total_value:,.2f}")
-    print("=" * 40)
-    return total_value, stock_values, portfolio_date
+    # --- 2. 处理期权 (仅当使用 yfinance 时) ---
+    if DATA_SOURCE == 0 and options_portfolio:
+        print("\n正在使用 [yfinance] 获取您的期权价值...\n")
+        for opt in options_portfolio:
+            result = None
+            for attempt in range(MAX_RETRIES):
+                result = get_option_price_yfinance(opt['ticker'], opt['expiry'], opt['strike'], opt['type'])
+                if result is not None: break
+                if attempt < MAX_RETRIES - 1:
+                    print(f"  - 获取 {opt['key']} 失败。将在 {RETRY_DELAY} 秒后重试...")
+                    time.sleep(RETRY_DELAY)
+            if result:
+                price, fetched_date = result
+                if portfolio_date is None: portfolio_date = fetched_date
+                # 每张期权合约代表100股
+                option_value = price * opt['quantity'] * 100
+                total_value += option_value
+                asset_values[opt['key']] = option_value
+                print(f"  -> 成功: {opt['key']} {opt['quantity']:g} 张 @ ${price:.2f} = ${option_value:,.2f}")
+            else:
+                asset_values[opt['key']] = 0
+                print(f"  -> 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {opt['key']} 的价格。")
+
+    print("\n" + "=" * 50)
+    print(f"投资组合总价值 (截至 {portfolio_date or '未知日期'}): ${total_value:,.2f}")
+    print("=" * 50)
+    # 返回 asset_values 而不是 stock_values
+    return total_value, asset_values, portfolio_date
 
 
 # ==============================================================================
-# 4. 将历史数据保存到文件
+# 4. 将历史数据保存到文件 (V2 - 使用 pandas 重构)
 # ==============================================================================
-def save_history(date_to_save, value_to_save, stock_values):
-    if not os.path.exists(HISTORY_FILE):
-        current_tickers = sorted(stock_values.keys())
-        header = 'date,total_value,' + ','.join(current_tickers) + '\n'
-        values_line = [f"{stock_values.get(ticker, 0):.2f}" for ticker in current_tickers]
-        new_line = f"{date_to_save},{value_to_save:.2f}," + ','.join(values_line) + '\n'
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            f.write(header)
-            f.write(new_line)
-        print(f"\n成功: 已创建并记录 {date_to_save} 的数据。")
-        return
+def save_history(date_to_save, value_to_save, asset_values):
+    """
+    将当日的投资组合详情追加或更新到历史记录CSV文件中。
+    - 如果当天记录已存在，则完全覆盖。
+    - 自动对齐数据列，处理新增或移除的资产。
+    - 在保存前，会自动删除在所有记录中都为0的列（清理已清仓的资产）。
+    """
+    # 1. 准备当日的新数据行
+    new_row_data = {'total_value': value_to_save, **asset_values}
+    new_row = pd.Series(new_row_data, name=date_to_save)
 
-    df = pd.read_csv(HISTORY_FILE)
-    historical_tickers = sorted([col for col in df.columns if col not in ['date', 'total_value']])
-    current_tickers = list(stock_values.keys())
-    all_tickers = sorted(list(set(historical_tickers + current_tickers)))
-    new_values_map = {ticker: f"{stock_values.get(ticker, 0):.2f}" for ticker in all_tickers}
-    new_line_str = f"{date_to_save},{value_to_save:.2f}," + ','.join([new_values_map[t] for t in all_tickers])
-
-    if date_to_save in df['date'].values:
-        df.set_index('date', inplace=True)
-        new_data_list = new_line_str.split(',')
-        df.loc[date_to_save, 'total_value'] = float(new_data_list[1])
-        for i, ticker in enumerate(all_tickers):
-            if ticker not in df.columns: df[ticker] = 0.0
-            df.loc[date_to_save, ticker] = float(new_data_list[i + 2])
-        df.reset_index(inplace=True)
-        print(f"\n提示: 日期 {date_to_save} 的数据已覆盖更新。")
+    # 2. 读取现有的历史数据
+    if os.path.exists(HISTORY_FILE) and os.path.getsize(HISTORY_FILE) > 0:
+        try:
+            # 将第一列 'date' 作为索引来读取
+            df = pd.read_csv(HISTORY_FILE, index_col='date')
+        except (pd.errors.EmptyDataError, IndexError):
+            df = pd.DataFrame() # 文件存在但为空或格式错误
     else:
-        new_row_df = pd.DataFrame([new_line_str.split(',')], columns=['date', 'total_value'] + all_tickers)
-        df = pd.concat([new_row_df, df], ignore_index=True)
-        print(f"\n成功: 已将 {date_to_save} 的新数据插入到文件。")
+        df = pd.DataFrame() # 文件不存在
 
-    df.fillna(0, inplace=True)
-    final_columns = ['date', 'total_value'] + all_tickers
-    df = df[final_columns]
-    df.to_csv(HISTORY_FILE, index=False, float_format='%.2f')
+    # 3. 核心逻辑：覆盖、对齐、清理
+
+    # a) 覆盖当天数据：如果日期已存在，先删除旧行
+    if date_to_save in df.index:
+        df = df.drop(index=date_to_save)
+        print(f"\n提示: 日期 {date_to_save} 的旧数据已找到，将进行覆盖更新。")
+    else:
+        print(f"\n成功: 已将 {date_to_save} 的新数据添加到历史记录。")
+
+    # b) 添加新行：使用 concat 会自动按列名对齐。
+    #    - 如果新行有df没有的列，df的老数据行在该列会填充NaN。
+    #    - 如果df有新行没有的列，新行在该列会填充NaN。
+    df = pd.concat([df, new_row.to_frame().T])
+
+    # c) 填充与清理：将所有NaN填充为0，然后删除不再需要的列
+    df = df.fillna(0)
+
+    # 找到在所有行中值都为0的列
+    cols_to_drop = df.columns[df.eq(0).all()]
+    if not cols_to_drop.empty:
+        df = df.drop(columns=cols_to_drop)
+        print(f"清理了已归零的资产列: {', '.join(cols_to_drop.tolist())}")
+
+    # 4. 重新排序列，确保 total_value 在前面
+    if 'total_value' in df.columns:
+        cols = df.columns.tolist()
+        cols.remove('total_value')
+        # 按字母顺序排资产列
+        cols.sort()
+        final_cols = ['total_value'] + cols
+        df = df[final_cols]
+
+    # 5. 保存更新后的 DataFrame 到 CSV 文件
+    # 按日期降序排序后保存
+    df.sort_index(ascending=False, inplace=True)
+    df.to_csv(HISTORY_FILE, index=True, index_label='date', float_format='%.2f')
+
+    print(f"历史记录已成功更新到: {HISTORY_FILE}")
 
 
 # ==============================================================================
@@ -257,27 +373,27 @@ def plot_history_graph(output_filename):
     if len(df) < 2:
         print("历史数据不足，无法生成图表。")
         return
-    stock_columns = [col for col in df.columns if col != 'total_value']
+
+    asset_columns = [col for col in df.columns if col != 'total_value']
+    positive_assets = df[asset_columns].clip(lower=0)
+    negative_assets = df[asset_columns].clip(upper=0)
+
     fig, ax = plt.subplots(figsize=(16, 9))
-    ax.stackplot(df.index, [df[col] for col in stock_columns], alpha=0.8, labels=stock_columns)
-    ax.plot(df.index, df['total_value'], color='black', linewidth=2, linestyle='--', label='Total Value')
-    y_bottom_df = df[stock_columns].cumsum(axis=1).shift(1, axis=1).fillna(0)
-    for col in stock_columns:
-        first_holding_mask = df[col] > 0
-        if not first_holding_mask.any(): continue
-        first_holding_day = first_holding_mask.idxmax()
-        stock_value_on_day = df.loc[first_holding_day, col]
-        y_bottom_on_day = y_bottom_df.loc[first_holding_day, col]
-        label_y_pos = y_bottom_on_day + stock_value_on_day / 2.0
-        ax.text(first_holding_day, label_y_pos, " " + col, ha='left', va='center', color='white', fontsize=11,
-                fontweight='bold', path_effects=[path_effects.withStroke(linewidth=3, foreground='black')])
+
+    ax.stackplot(df.index, positive_assets.T, labels=positive_assets.columns)
+    ax.stackplot(df.index, negative_assets.T)
+
+    ax.plot(df.index, df['total_value'], color='black', linewidth=2.5, linestyle='--', label='Total Value')
+
     ax.set_title('Portfolio Value Over Time', fontsize=20)
     ax.set_ylabel('Value ($)', fontsize=14)
     ax.set_xlabel('Date', fontsize=14)
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('$%1.0f'))
     ax.set_xlim(df.index[0], df.index[-1])
+    ax.axhline(0, color='black', linewidth=0.5)
     plt.xticks(rotation=45)
+    plt.legend(loc='upper left')
     plt.tight_layout()
     try:
         plt.savefig(output_filename, dpi=300, bbox_inches='tight')
@@ -291,27 +407,28 @@ def plot_history_graph(output_filename):
 # ==============================================================================
 # 6. 绘制当日仓位饼图
 # ==============================================================================
-def plot_pie_chart(stock_values, total_value, output_filename):
+def plot_pie_chart(asset_values, total_value, output_filename):
     print(f"正在生成当日仓位饼图...")
-    positive_stock_values = {k: v for k, v in stock_values.items() if v > 0}
-    if not positive_stock_values or total_value <= 0:
-        print("没有有效的持仓数据可用于生成饼图。")
+    positive_asset_values = {k: v for k, v in asset_values.items() if v > 0}
+    if not positive_asset_values:
+        print("没有正价值的持仓可用于生成饼图。")
         return
-    tickers = list(positive_stock_values.keys())
-    sizes = list(positive_stock_values.values())
+
+    positive_total = sum(positive_asset_values.values())
+
+    labels = list(positive_asset_values.keys())
+    sizes = list(positive_asset_values.values())
+
     fig, ax = plt.subplots(figsize=(12, 9))
-    wedges, _ = ax.pie(sizes, startangle=90, colors=plt.cm.viridis(np.linspace(0, 1, len(sizes))))
-    for i, p in enumerate(wedges):
-        ang = (p.theta2 - p.theta1) / 2. + p.theta1
-        radius = 0.7
-        x = radius * np.cos(np.deg2rad(ang))
-        y = radius * np.sin(np.deg2rad(ang))
-        percentage = (sizes[i] / total_value) * 100
-        label_text = f"{tickers[i]}\n{percentage:.1f}%"
-        ax.text(x, y, label_text, ha='center', va='center', color='white', fontweight='bold', fontsize=11,
-                path_effects=[path_effects.withStroke(linewidth=3, foreground='black')])
-    ax.set_title('Portfolio Composition (Today)', fontsize=20)
+    ax.pie(sizes, labels=labels, autopct=lambda p: f'{p:.1f}%' if p > 1 else '', startangle=90,
+           pctdistance=0.85, colors=plt.cm.viridis(np.linspace(0, 1, len(labels))))
+
+    centre_circle = plt.Circle((0, 0), 0.70, fc='white')
+    fig.gca().add_artist(centre_circle)
+
+    ax.set_title('Positive Asset Composition (Today)', fontsize=20)
     ax.axis('equal')
+    plt.legend(labels, loc="best", bbox_to_anchor=(1, 0.5))
     try:
         plt.savefig(output_filename, dpi=300, bbox_inches='tight')
         print(f"成功: 当日仓位饼图已保存到 '{output_filename}'")
@@ -325,11 +442,11 @@ def plot_pie_chart(stock_values, total_value, output_filename):
 # 7. 主执行逻辑
 # ==============================================================================
 if __name__ == "__main__":
-    final_total_value, individual_stock_values, data_date = calculate_portfolio_value()
+    final_total_value, all_asset_values, data_date = calculate_portfolio_value()
 
-    if final_total_value > 0 and data_date is not None:
-        save_history(data_date, final_total_value, individual_stock_values)
+    if data_date is not None:
+        save_history(data_date, final_total_value, all_asset_values)
         plot_history_graph(PLOT_FILE)
-        plot_pie_chart(individual_stock_values, final_total_value, PIE_CHART_FILE)
-    elif data_date is None:
+        plot_pie_chart(all_asset_values, final_total_value, PIE_CHART_FILE)
+    else:
         print("\n错误: 未能获取到任何有效的交易日期，无法保存和绘图。")
