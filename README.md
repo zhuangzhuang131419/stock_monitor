@@ -34,12 +34,13 @@ pip install -r requirements.txt
 ## 🧩 requirements.txt
 
 ```txt
-requests>=2.31.0
-pandas>=2.0.0
-matplotlib>=3.7.0
-numpy>=1.24.0
-yfinance>=0.2.40
-urllib3>=2.0.0
+requests
+pandas
+matplotlib
+numpy
+yfinance
+urllib3
+datetime
 ```
 
 ---
