@@ -326,23 +326,30 @@ async function loadInitialSummary() {
 
         const csvText = await response.text();
         const lines = csvText.trim().split('\n');
+
+        // 必须至少有表头和一行数据
         if (lines.length < 2) throw new Error('CSV 文件内容不正确。');
 
         const headers = lines[0].split(',');
-        const lastDataLine = lines[lines.length - 1].split(',');
+
+        // --- 核心修正 ---
+        // 因为数据是倒序的，所以最新的数据在表头下面的第一行，即 lines[1]
+        const latestDataLine = lines[1].split(',');
+        // --- 修正结束 ---
+
         const totalValueIndex = headers.indexOf('total_value');
         const dateIndex = headers.indexOf('date');
 
         if (totalValueIndex === -1) throw new Error('CSV 中未找到 "total_value" 列。');
+        if (dateIndex === -1) throw new Error('CSV 中未找到 "date" 列。');
 
-        const latestTotalValue = parseFloat(lastDataLine[totalValueIndex]);
+        const latestTotalValue = parseFloat(latestDataLine[totalValueIndex]);
         if (isNaN(latestTotalValue)) throw new Error('最新的 "total_value" 无效。');
 
         totalValueDisplay.textContent = `总资产：$${latestTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-        if(dateIndex !== -1) {
-            lastUpdatedTime.textContent = lastDataLine[dateIndex];
-        }
+        // 从最新的数据行中获取日期
+        lastUpdatedTime.textContent = latestDataLine[dateIndex];
 
     } catch (error) {
         console.error('加载资产概览失败:', error);
