@@ -20,19 +20,21 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # 1. 配置加载模块
 # ==============================================================================
 
+# ==============================================================================
+# 1. 配置加载模块
+# ==============================================================================
+
 def load_config():
     """
     从 config.ini 文件加载所有配置。
-    (V4 - 增加了对行内注释的支持，并指定UTF-8编码)
+    (V5 - 增加现金配置)
     """
     config_file = 'config.ini'
     if not os.path.exists(config_file):
         print(f"错误: 配置文件 '{config_file}' 不存在，请先创建。")
         sys.exit()
 
-    # 核心修改：增加了 inline_comment_prefixes=('#', ';') 来识别行内注释
     config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
-    # 明确使用 utf-8 编码读取，防止中文注释导致问题
     config.read(config_file, encoding='utf-8')
 
     try:
@@ -54,42 +56,25 @@ def load_config():
         for ticker, quantity in config.items('Portfolio'):
             portfolio.append((ticker.upper(), float(quantity)))
 
-        # [OptionsPortfolio] - 期权 (此部分逻辑无需再修改)
+        # [OptionsPortfolio] - 期权
         options_portfolio = []
         if config.has_section('OptionsPortfolio'):
             for key, quantity_str in config.items('OptionsPortfolio'):
                 try:
                     parts = key.upper().rsplit('_', 2)
-                    if len(parts) != 3:
-                        print(f"警告: 忽略格式错误的期权键 (无法分离价格和类型): {key}")
-                        continue
-
+                    if len(parts) != 3: continue
                     base, strike_str, opt_type = parts
-
                     date_parts = base.rsplit('_', 1)
-                    if len(date_parts) != 2:
-                        print(f"警告: 忽略格式错误的期权键 (无法分离股票和日期): {key}")
-                        continue
-
+                    if len(date_parts) != 2: continue
                     ticker, date_str = date_parts
-
-                    if opt_type not in ['CALL', 'PUT']:
-                        print(f"警告: 忽略类型错误的期权: {key} (类型必须是 CALL 或 PUT)")
-                        continue
-
+                    if opt_type not in ['CALL', 'PUT']: continue
                     option_details = {
-                        'key': key.upper(),
-                        'ticker': ticker,
-                        'expiry': date_str,
-                        'strike': float(strike_str),
-                        'type': opt_type,
-                        'quantity': float(quantity_str)  # 现在 quantity_str 会是纯净的数字字符串
+                        'key': key.upper(), 'ticker': ticker, 'expiry': date_str,
+                        'strike': float(strike_str), 'type': opt_type, 'quantity': float(quantity_str)
                     }
                     options_portfolio.append(option_details)
-                except ValueError:
-                    print(f"警告: 无法解析期权 '{key}'。请确保其行权价和右侧的数量值都是纯数字。")
-                except Exception as e:
-                    print(f"警告: 解析期权 '{key}' 时发生未知错误: {e}")
+                except Exception:
+                    print(f"警告: 无法解析期权 '{key}'。")
 
         # [Proxy]
         proxy_ip = config.get('Proxy', 'ip', fallback=None)
@@ -99,8 +84,12 @@ def load_config():
         else:
             proxy_ip, proxy_port = None, None
 
+        # [Cash] - 新增：读取现金余额
+        cash_amount = config.getfloat('Cash', 'amount', fallback=0.0)
+
+        # 返回值中增加 cash_amount
         return (data_source, api_key, history_file, plot_file, pie_chart_file,
-                max_retries, retry_delay, portfolio, options_portfolio, proxy_ip, proxy_port)
+                max_retries, retry_delay, portfolio, options_portfolio, proxy_ip, proxy_port, cash_amount)
 
     except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
         print(f"错误: 配置文件 'config.ini' 格式不正确或缺少必要项: {e}")
@@ -109,7 +98,7 @@ def load_config():
 
 # 在程序开始时加载所有配置
 (DATA_SOURCE, API_KEY, HISTORY_FILE, PLOT_FILE, PIE_CHART_FILE, MAX_RETRIES,
- RETRY_DELAY, portfolio, options_portfolio, PROXY_IP, PROXY_PORT) = load_config()
+ RETRY_DELAY, portfolio, options_portfolio, PROXY_IP, PROXY_PORT, CASH_AMOUNT) = load_config()
 
 
 # ==============================================================================
@@ -238,9 +227,12 @@ def get_option_price_yfinance(ticker, expiry, strike_price, option_type):
 # ==============================================================================
 # 3. 计算总价值并打印结果
 # ==============================================================================
+# ==============================================================================
+# 3. 计算总价值并打印结果
+# ==============================================================================
 def calculate_portfolio_value():
     total_value = 0.0
-    asset_values = {}  # 重命名为 asset_values 以包含股票和期权
+    asset_values = {}
     portfolio_date = None
 
     # --- 1. 处理股票 ---
@@ -280,7 +272,6 @@ def calculate_portfolio_value():
             if result:
                 price, fetched_date = result
                 if portfolio_date is None: portfolio_date = fetched_date
-                # 每张期权合约代表100股
                 option_value = price * opt['quantity'] * 100
                 total_value += option_value
                 asset_values[opt['key']] = option_value
@@ -289,10 +280,15 @@ def calculate_portfolio_value():
                 asset_values[opt['key']] = 0
                 print(f"  -> 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {opt['key']} 的价格。")
 
+    # --- 3. 添加现金 (新增部分) ---
+    if CASH_AMOUNT > 0:
+        asset_values['CASH'] = CASH_AMOUNT
+        total_value += CASH_AMOUNT
+        print(f"\n计入现金余额: ${CASH_AMOUNT:,.2f}")
+
     print("\n" + "=" * 50)
     print(f"投资组合总价值 (截至 {portfolio_date or '未知日期'}): ${total_value:,.2f}")
     print("=" * 50)
-    # 返回 asset_values 而不是 stock_values
     return total_value, asset_values, portfolio_date
 
 
