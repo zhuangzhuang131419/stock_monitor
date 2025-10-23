@@ -6,6 +6,28 @@
     <title>投资组合编辑器</title>
     <!-- 移除了内部样式，改为链接到外部 style.css 文件 -->
     <link rel="stylesheet" href="style.css">
+    <style>
+        .portfolio-item-static {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .portfolio-item-static label {
+            flex-shrink: 0;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .portfolio-item-static input,
+        .portfolio-item-static select {
+            flex-grow: 1; /* 让输入框和下拉菜单填满剩余空间 */
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            font-size: 14px;
+            box-sizing: border-box; /* 确保 padding 不会撑大宽度 */
+        }
+    </style>
 </head>
 <body>
 

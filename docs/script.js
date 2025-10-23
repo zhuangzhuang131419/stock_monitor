@@ -152,7 +152,7 @@ async function runWorkflow() {
     }
 }
 
-// --- 函数已重写 ---
+// --- 请用这个新版本替换旧的 displayPortfolio 函数 ---
 function displayPortfolio(lines) {
     portfolioEditor.innerHTML = '';
     let currentSection = null;
@@ -162,7 +162,7 @@ function displayPortfolio(lines) {
 
         if (processedLine.startsWith('[') && processedLine.endsWith(']')) {
             currentSection = processedLine.substring(1, processedLine.length - 1);
-            if (currentSection === 'Proxy') return; // 不显示 Proxy 区块
+            if (currentSection === 'Proxy') return;
             const sectionDiv = document.createElement('div');
             sectionDiv.className = 'portfolio-section';
             sectionDiv.innerHTML = `<h3>${currentSection}</h3>`;
@@ -184,28 +184,41 @@ function displayPortfolio(lines) {
             if (!key || typeof value === 'undefined') return;
 
             let itemDiv;
-            // --- 新逻辑：为 data_source 创建下拉菜单 ---
             if (key === 'data_source') {
                 const commentLine = (index > 0) ? lines[index - 1].trim() : '';
-                const options = commentLine.match(/\d+\s*:\s*[\w-]+/g);
+                // --- 修正开始 ---
+                // 1. 使用更强大的正则表达式来捕获包含括号、中文和空格的完整描述
+                const options = commentLine.match(/\d+\s*:\s*.*?(?=\s+\d+:|$)/g);
+                // --- 修正结束 ---
 
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item-static';
                 const label = document.createElement('label');
                 label.textContent = key;
 
-                if (options) { // 如果找到匹配的注释，创建下拉菜单
+                if (options) {
                     const select = document.createElement('select');
+                    // --- 修正开始 ---
+                    // 2. 为下拉菜单添加一个 class，以便 CSS 可以设置样式
+                    select.className = 'data-source-select';
+                    // --- 修正结束 ---
+
                     options.forEach(opt => {
-                        const [num, desc] = opt.split(':').map(s => s.trim());
+                        // --- 修正开始 ---
+                        // 3. 使用更安全的方式分割，只在第一个冒号处分割，以防描述中也包含冒号
+                        const firstColonIndex = opt.indexOf(':');
+                        const num = opt.substring(0, firstColonIndex).trim();
+                        const desc = opt.substring(firstColonIndex + 1).trim();
+                        // --- 修正结束 ---
+
                         const optionEl = document.createElement('option');
                         optionEl.value = num;
-                        optionEl.textContent = desc;
+                        optionEl.textContent = desc; // 现在 desc 是完整的描述
                         if (num === value) optionEl.selected = true;
                         select.appendChild(optionEl);
                     });
                     itemDiv.append(label, select);
-                } else { // 否则，退回为普通输入框
+                } else {
                     const input = document.createElement('input');
                     input.type = 'text'; input.value = value;
                     itemDiv.append(label, input);
@@ -223,7 +236,7 @@ function displayPortfolio(lines) {
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = '删除'; removeBtn.className = 'remove-btn'; removeBtn.onclick = () => itemDiv.remove();
                 itemDiv.append(keyInput, valueInput, removeBtn);
-            } else { // 其他静态配置项
+            } else {
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item-static';
                 const label = document.createElement('label');
