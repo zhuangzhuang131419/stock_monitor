@@ -13,9 +13,7 @@ function getRepoInfoFromURL() {
     const hostname = window.location.hostname;
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     if (hostname.includes('github.io') && pathParts.length > 0) {
-        const owner = hostname.split('.')[0];
-        const repo = pathParts[0];
-        return { owner, repo };
+        return { owner: hostname.split('.')[0], repo: pathParts[0] };
     }
     return { owner: 'YOUR_USERNAME', repo: 'YOUR_REPONAME' };
 }
@@ -63,13 +61,10 @@ async function savePortfolio() {
     sections.forEach(section => {
         const sectionName = section.querySelector('h3').textContent;
         if (sectionName !== 'Portfolio' && sectionName !== 'OptionsPortfolio') return;
-
         const keys = new Set();
         const items = section.querySelectorAll('.portfolio-item, .option-item-row');
-
         items.forEach(item => {
             let key = '', value = '', inputToMark = null;
-
             if (item.classList.contains('option-item-row')) {
                 const tickerInput = item.querySelector('.option-ticker-input');
                 const dateInput = item.querySelector('.option-date-select');
@@ -91,7 +86,6 @@ async function savePortfolio() {
                 inputToMark = keyInput;
                 if (!key && !value) return;
             }
-
             if (!key && value) {
                 isValid = false;
                 inputToMark.classList.add('invalid');
@@ -110,18 +104,13 @@ async function savePortfolio() {
         updateStatus(`保存失败，请修正以下错误：<br>- ${errorMessages.join('<br>- ')}`, true);
         return;
     }
-
     const newContent = buildIniStringFromUI();
     const newContentBase64 = btoa(unescape(encodeURIComponent(newContent)));
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${CONFIG_FILE_PATH}`, {
             method: 'PUT',
             headers: { 'Authorization': `token ${token}` },
-            body: JSON.stringify({
-                message: `Update ${CONFIG_FILE_PATH} via web editor`,
-                content: newContentBase64,
-                sha: fileSha
-            })
+            body: JSON.stringify({ message: `Update ${CONFIG_FILE_PATH} via web editor`, content: newContentBase64, sha: fileSha })
         });
         if (!response.ok) throw new Error(`GitHub API 错误: ${response.statusText}`);
         const data = await response.json();
@@ -157,7 +146,6 @@ function displayPortfolio(iniContent) {
     portfolioEditor.innerHTML = '';
     const lines = iniContent.split('\n');
     let currentSection = null;
-    let sectionDiv = null;
 
     lines.forEach(line => {
         const processedLine = line.split('#')[0].trim();
@@ -165,27 +153,35 @@ function displayPortfolio(iniContent) {
 
         if (processedLine.startsWith('[') && processedLine.endsWith(']')) {
             currentSection = processedLine.substring(1, processedLine.length - 1);
-            sectionDiv = document.createElement('div');
+            const sectionDiv = document.createElement('div');
             sectionDiv.className = 'portfolio-section';
             sectionDiv.innerHTML = `<h3>${currentSection}</h3>`;
             portfolioEditor.appendChild(sectionDiv);
+
             if (currentSection === 'Portfolio' || currentSection === 'OptionsPortfolio') {
                 const addBtn = document.createElement('button');
                 addBtn.textContent = '＋ 新增一行';
                 addBtn.className = 'add-btn';
-                addBtn.onclick = () => addNewRow(sectionDiv);
+                // --- FIX STARTS HERE ---
+                // Use a standard function and 'this' to correctly reference the button's parent element
+                addBtn.onclick = function() {
+                    addNewRow(this.parentElement);
+                };
+                // --- FIX ENDS HERE ---
                 sectionDiv.appendChild(addBtn);
             }
-        } else if (processedLine.includes('=') && sectionDiv) {
+        } else if (currentSection && processedLine.includes('=')) {
+            const sectionDiv = Array.from(portfolioEditor.querySelectorAll('.portfolio-section h3'))
+                                  .find(h3 => h3.textContent === currentSection)?.parentElement;
+            if (!sectionDiv) return;
+
             const [key, value] = processedLine.split('=').map(s => s.trim());
             if (!key || typeof value === 'undefined') return;
 
             let itemDiv;
             if (currentSection === 'OptionsPortfolio') {
                 const parts = key.split('_');
-                if (parts.length === 4) {
-                    itemDiv = createOptionRowUI(parts[0], parts[1], parts[2], parts[3], value);
-                }
+                if (parts.length === 4) itemDiv = createOptionRowUI(parts[0], parts[1], parts[2], parts[3], value);
             } else if (currentSection === 'Portfolio') {
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item';
@@ -203,9 +199,7 @@ function displayPortfolio(iniContent) {
                 removeBtn.textContent = '删除';
                 removeBtn.className = 'remove-btn';
                 removeBtn.onclick = () => itemDiv.remove();
-                itemDiv.appendChild(keyInput);
-                itemDiv.appendChild(valueInput);
-                itemDiv.appendChild(removeBtn);
+                itemDiv.append(keyInput, valueInput, removeBtn);
             } else {
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item-static';
@@ -214,14 +208,9 @@ function displayPortfolio(iniContent) {
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.value = value;
-                itemDiv.appendChild(label);
-                itemDiv.appendChild(input);
+                itemDiv.append(label, input);
             }
-
-            if (itemDiv) {
-                const addBtn = sectionDiv.querySelector('.add-btn');
-                sectionDiv.insertBefore(itemDiv, addBtn || null);
-            }
+            if (itemDiv) sectionDiv.insertBefore(itemDiv, sectionDiv.querySelector('.add-btn') || null);
         }
     });
 }
@@ -249,7 +238,7 @@ function createOptionRowUI(ticker = '', date = '', strike = '', type = 'CALL', q
         const option = document.createElement('option');
         option.value = t;
         option.textContent = t;
-        if (t === type) option.selected = true;
+        if (t.toUpperCase() === type.toUpperCase()) option.selected = true;
         typeSelect.appendChild(option);
     });
     const valueInput = document.createElement('input');
@@ -271,7 +260,7 @@ function addNewRow(sectionDiv) {
     let itemDiv;
     if (sectionTitle === 'OptionsPortfolio') {
         itemDiv = createOptionRowUI();
-    } else {
+    } else if (sectionTitle === 'Portfolio') {
         itemDiv = document.createElement('div');
         itemDiv.className = 'portfolio-item';
         const keyInput = document.createElement('input');
@@ -286,30 +275,27 @@ function addNewRow(sectionDiv) {
         removeBtn.textContent = '删除';
         removeBtn.className = 'remove-btn';
         removeBtn.onclick = () => itemDiv.remove();
-        itemDiv.appendChild(keyInput);
-        itemDiv.appendChild(valueInput);
-        itemDiv.appendChild(removeBtn);
+        itemDiv.append(keyInput, valueInput, removeBtn);
     }
-    sectionDiv.insertBefore(itemDiv, addBtn);
+    if (itemDiv) {
+        sectionDiv.insertBefore(itemDiv, addBtn);
+    }
 }
 
 function buildIniStringFromUI() {
     let iniContent = '';
-    const sections = document.querySelectorAll('.portfolio-section');
-    sections.forEach(section => {
+    document.querySelectorAll('.portfolio-section').forEach(section => {
         const title = section.querySelector('h3').textContent;
         iniContent += `[${title}]\n`;
-        const items = section.querySelectorAll('.portfolio-item, .option-item-row, .portfolio-item-static');
-        items.forEach(item => {
+        section.querySelectorAll('.portfolio-item, .option-item-row, .portfolio-item-static').forEach(item => {
             let key = '', value = '';
             if (item.classList.contains('option-item-row')) {
                 const ticker = item.querySelector('.option-ticker-input').value.trim().toUpperCase();
                 const date = item.querySelector('.option-date-select').value;
                 const strike = item.querySelector('.option-strike-input').value.trim();
-                const type = item.querySelector('.option-type-select').value;
                 value = item.querySelector('.value-input').value.trim();
                 if (ticker && date && strike && value) {
-                    key = `${ticker}_${date}_${strike}_${type}`;
+                    key = `${ticker}_${date}_${strike}_${item.querySelector('.option-type-select').value}`;
                 }
             } else if (item.classList.contains('portfolio-item')) {
                 key = item.querySelector('.key-input')?.value.trim();
@@ -318,9 +304,7 @@ function buildIniStringFromUI() {
                 key = item.querySelector('label')?.textContent;
                 value = item.querySelector('input')?.value.trim();
             }
-            if (key && value) {
-                iniContent += `${key} = ${value}\n`;
-            }
+            if (key && value) iniContent += `${key} = ${value}\n`;
         });
         iniContent += '\n';
     });
@@ -332,3 +316,5 @@ function updateStatus(message, isError = false) {
     statusMsg.className = isError ? 'status-error' : 'status-success';
     statusMsg.style.display = 'block';
 }
+
+// --- 脚本结束 ---
