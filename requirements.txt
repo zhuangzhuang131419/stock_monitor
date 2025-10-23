@@ -4,5 +4,3 @@ matplotlib
 numpy
 yfinance
 urllib3
-datetime
-json

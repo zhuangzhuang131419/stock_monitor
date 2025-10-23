@@ -71,7 +71,6 @@ matplotlib
 numpy
 yfinance
 urllib3
-datetime
 ```
 依赖安装后直接运行main.py即可
 ```bash
