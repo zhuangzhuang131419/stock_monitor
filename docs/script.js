@@ -36,14 +36,12 @@ const modal = {
 };
 const logoutButtons = document.querySelectorAll('.logout-btn');
 
-// ========== 新增: 历史表格弹窗的 DOM 元素 ==========
 const historyModal = {
     backdrop: document.getElementById('history-modal-backdrop'),
     container: document.getElementById('history-modal-container'),
     content: document.getElementById('history-table-content')
 };
 const totalValueDisplay = document.getElementById('total-value-display');
-// ====================================================
 
 // --- 初始化与事件监听 ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -69,22 +67,31 @@ function setupEventListeners() {
     document.getElementById('force-refresh-btn').addEventListener('click', forceRefreshPage);
     logoutButtons.forEach(btn => btn.addEventListener('click', handleLogout));
 
-    // ========== 新增: 历史表格弹窗的事件监听 ==========
+    // 历史表格弹窗的事件监听
     totalValueDisplay.addEventListener('click', showHistoryTable);
     historyModal.backdrop.addEventListener('click', hideHistoryTable);
-    // ====================================================
 }
 
-// ========== 新增: 显示/隐藏历史表格的函数 ==========
+// ========== 修改: 显示/隐藏历史表格的函数 ==========
 /**
- * 异步获取并显示历史数据表格
+ * 异步获取并以动画效果显示历史数据表格
  */
 async function showHistoryTable() {
-    // 立即显示弹窗和加载提示
+    // 1. 禁止 body 滚动
+    document.body.classList.add('modal-open');
+
+    // 2. 移除 hidden 类，让元素在 DOM 中可见但保持透明
     historyModal.backdrop.classList.remove('hidden');
     historyModal.container.classList.remove('hidden');
-    historyModal.content.innerHTML = '<p style="text-align:center; padding: 20px;">正在加载历史数据...</p>';
 
+    // 3. 使用 requestAnimationFrame 确保浏览器渲染了上述更改后，再添加 is-active 类来触发动画
+    requestAnimationFrame(() => {
+        historyModal.backdrop.classList.add('is-active');
+        historyModal.container.classList.add('is-active');
+    });
+
+    // 4. 加载内容
+    historyModal.content.innerHTML = '<p style="text-align:center; padding: 20px;">正在加载历史数据...</p>';
     try {
         const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
         const timestamp = new Date().getTime();
@@ -95,24 +102,32 @@ async function showHistoryTable() {
         }
 
         const csvText = await response.text();
-        const tableHtml = parseCsvToHtmlTable(csvText); // 使用辅助函数生成表格
+        const tableHtml = parseCsvToHtmlTable(csvText);
         historyModal.content.innerHTML = tableHtml;
 
     } catch (error) {
         console.error('加载历史数据失败:', error);
-        // 在弹窗内显示错误信息
         historyModal.content.innerHTML = `<div class="status-error" style="display:block; margin: 20px;">加载失败: ${error.message}</div>`;
     }
 }
 
 /**
- * 隐藏历史数据表格
+ * 以动画效果隐藏历史数据表格
  */
 function hideHistoryTable() {
-    historyModal.backdrop.classList.add('hidden');
-    historyModal.container.classList.add('hidden');
-    // 清空内容，以便下次打开时重新加载
-    historyModal.content.innerHTML = '';
+    // 1. 恢复 body 滚动
+    document.body.classList.remove('modal-open');
+
+    // 2. 监听 transition 动画结束事件。我们只在容器上监听一次即可。
+    historyModal.container.addEventListener('transitionend', () => {
+        // 动画结束后，再添加 hidden 类以彻底隐藏
+        historyModal.backdrop.classList.add('hidden');
+        historyModal.container.classList.add('hidden');
+    }, { once: true }); // { once: true } 确保此事件监听器触发一次后自动移除
+
+    // 3. 立即移除 is-active 类，触发关闭动画
+    historyModal.backdrop.classList.remove('is-active');
+    historyModal.container.classList.remove('is-active');
 }
 
 /**
@@ -125,28 +140,22 @@ function parseCsvToHtmlTable(csvText) {
     if (lines.length === 0) return '<p>没有历史数据。</p>';
 
     let html = '<table class="history-table">';
-
-    // 处理表头
     const headers = lines[0].split(',');
     html += '<thead><tr>';
     headers.forEach(header => {
-        html += `<th>${header.trim().replace(/_/g, ' ')}</th>`; // 将下划线替换为空格，更美观
+        html += `<th>${header.trim().replace(/_/g, ' ')}</th>`;
     });
     html += '</tr></thead>';
 
-    // 处理数据行
     html += '<tbody>';
-    // 从第二行开始，因为第一行是表头
     for (let i = 1; i < lines.length; i++) {
-        if (!lines[i]) continue; // 跳过空行
+        if (!lines[i]) continue;
         const cells = lines[i].split(',');
         html += '<tr>';
         cells.forEach(cell => {
             const trimmedCell = cell.trim();
-            // 尝试将纯数字（尤其是浮点数）格式化
             const num = Number(trimmedCell);
             if (!isNaN(num) && trimmedCell.includes('.')) {
-                // 如果是浮点数，格式化为带千位分隔符的两位小数
                 html += `<td>${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
             } else {
                 html += `<td>${trimmedCell}</td>`;
@@ -154,8 +163,7 @@ function parseCsvToHtmlTable(csvText) {
         });
         html += '</tr>';
     }
-    html += '</tbody>';
-    html += '</table>';
+    html += '</tbody></table>';
     return html;
 }
 // ====================================================

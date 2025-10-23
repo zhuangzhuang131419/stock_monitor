@@ -10,6 +10,12 @@ body {
     box-sizing: border-box;
 }
 
+/* ========== 新增: 禁止 body 滚动 ========== */
+body.modal-open {
+    overflow: hidden;
+}
+/* ========================================== */
+
 .main-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -72,16 +78,14 @@ body {
     text-align: center;
     margin: 15px 0 40px 0;
 }
-/* ========== 新增: 总资产标题点击样式 ========== */
 .clickable-summary {
     cursor: pointer;
-    user-select: none; /* 防止用户选中文字 */
+    user-select: none;
     transition: color 0.2s ease-in-out;
 }
 .clickable-summary:hover {
-    color: #007bff; /* 悬停时变为蓝色 */
+    color: #007bff;
 }
-/* ========================================== */
 
 .charts-container {
     text-align: center;
@@ -105,14 +109,14 @@ body {
     padding-top: 20px;
     border-top: 1px solid #e1e4e8;
     color: #6a737d;
-    display: flex; /* 使用 flex 布局 */
-    justify-content: center; /* 水平居中 */
-    align-items: center; /* 垂直居中 */
-    gap: 15px; /* 元素之间的间距 */
-    flex-wrap: wrap; /* 允许换行 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
 }
 .summary-footer p {
-    margin: 0; /* 移除 p 标签的默认外边距 */
+    margin: 0;
 }
 
 
@@ -247,28 +251,20 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     background-color: #5a6268;
 }
 
-/* ========== 新增: 历史表格弹窗样式 ========== */
+/* ========== 修改: 历史表格弹窗样式 ========== */
 .modal-backdrop-new {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(36, 41, 46, 0.7); /* 更深的背景 */
-    z-index: 199; /* 更高的层级 */
-    opacity: 1;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(36, 41, 46, 0.7);
+    z-index: 199;
+    opacity: 0; /* 默认透明 */
     transition: opacity 0.3s ease;
-}
-.modal-backdrop-new.hidden {
-    opacity: 0;
-    pointer-events: none; /* 隐藏时不可点击 */
 }
 
 #history-modal-container {
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(1);
+    top: 50%; left: 50%;
     width: 90%;
     max-width: 1000px;
     height: 80vh;
@@ -279,13 +275,18 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     z-index: 200;
     display: flex;
     flex-direction: column;
-    opacity: 1;
+    opacity: 0; /* 默认透明 */
+    transform: translate(-50%, -50%) scale(0.95); /* 默认缩小 */
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
-#history-modal-container.hidden {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.9);
-    pointer-events: none;
+
+/* 当弹窗激活时，改变透明度和大小，触发动画 */
+.modal-backdrop-new.is-active,
+#history-modal-container.is-active {
+    opacity: 1;
+}
+#history-modal-container.is-active {
+    transform: translate(-50%, -50%) scale(1);
 }
 
 #history-table-content {
@@ -294,7 +295,6 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     flex-grow: 1;
 }
 
-/* 美化表格样式 */
 .history-table {
     width: 100%;
     border-collapse: collapse;
