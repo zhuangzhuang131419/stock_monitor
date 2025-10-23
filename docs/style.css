@@ -10,9 +10,8 @@ body {
     box-sizing: border-box;
 }
 
-/* 优化点 1: 增大了主容器的最大宽度，以便更好地展示图表 */
 .main-container {
-    max-width: 1200px; /* 原为 850px */
+    max-width: 1200px;
     margin: 0 auto;
     background-color: #ffffff;
     border-radius: 12px;
@@ -51,7 +50,7 @@ body {
 
 /* --- 内容区域与面板 --- */
 .content-area {
-    padding: 25px 35px; /* 增加了左右内边距 */
+    padding: 25px 35px;
 }
 .tab-panel {
     display: none;
@@ -67,28 +66,26 @@ body {
 
 /* --- 资产概览面板 --- */
 #total-value-display {
-    font-size: 42px; /* 增大字号 */
+    font-size: 42px;
     font-weight: 700;
     color: #2c3e50;
     text-align: center;
-    margin: 15px 0 40px 0; /* 增加底部间距 */
+    margin: 15px 0 40px 0;
 }
-/* 优化点 1: 移除 flex 布局，让图表自然垂直排列 */
 .charts-container {
-    text-align: center; /* 辅助居中 */
+    text-align: center;
 }
-/* 优化点 1: 让图表占据更大宽度并有合适的间距 */
 .charts-container img {
-    max-width: 90%; /* 原为 48%，现在更宽更清晰 */
+    max-width: 90%;
     display: block;
-    margin: 0 auto 25px auto; /* 居中并添加底部间距 */
+    margin: 0 auto 25px auto;
     height: auto;
     border: 1px solid #e1e4e8;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
 .charts-container img:last-child {
-    margin-bottom: 0; /* 移除最后一个图表的底部间距 */
+    margin-bottom: 0;
 }
 
 .summary-footer {
@@ -97,19 +94,6 @@ body {
     padding-top: 20px;
     border-top: 1px solid #e1e4e8;
     color: #6a737d;
-}
-#run-workflow-btn-summary {
-    background-color: #007bff;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-top: 10px;
-}
-#run-workflow-btn-summary:hover {
-    background-color: #0069d9;
 }
 
 /* --- 编辑器面板 --- */
@@ -120,19 +104,6 @@ body {
     display: flex;
     align-items: center;
     gap: 20px;
-}
-.editor-actions button {
-    background-color: #28a745;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    margin: 0;
-}
-.editor-actions button:hover {
-    background-color: #218838;
 }
 
 /* --- 通用状态消息 --- */
@@ -145,7 +116,7 @@ body {
 .status-success { background-color: #e6ffed; border: 1px solid #b7ebc9; color: #1f7c3c; }
 .status-error { background-color: #ffebe6; border: 1px solid #ffc2b3; color: #c82300; }
 
-/* --- 编辑器内部样式 (基本沿用) --- */
+/* --- 编辑器内部样式 --- */
 .portfolio-section { margin-bottom: 20px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
 .portfolio-section h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
 input, select {
@@ -218,8 +189,38 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 /* --- 响应式适配 --- */
 @media (max-width: 768px) {
     body { padding: 0; }
-    .main-container { border-radius: 0; max-width: 100%; } /* 移动端占满宽度 */
-    .content-area { padding: 20px; } /* 调整移动端内边距 */
+    .main-container { border-radius: 0; max-width: 100%; }
+    .content-area { padding: 20px; }
     .charts-container img { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
+}
+
+/* ========== 全局操作按钮统一样式 (已整合) ========== */
+.action-btn {
+    background-color: #007bff; /* 主操作色：蓝色 */
+    color: white;
+    border: none;
+    padding: 10px 20px; /* 统一使用大尺寸内边距 */
+    border-radius: 6px; /* 统一使用大尺寸圆角 */
+    cursor: pointer;
+    font-size: 16px; /* 统一使用大号字体 */
+    font-family: 'Noto Sans SC', sans-serif;
+    transition: background-color 0.3s ease;
+    margin: 0; /* 移除外边距，由父容器 .summary-footer 或 .editor-actions 的 gap 控制间距 */
+    line-height: 1.5;
+}
+
+.action-btn:hover {
+    background-color: #0056b3; /* 蓝色按钮的悬停效果 */
+}
+
+/* 为“保存”按钮单独设置颜色 */
+#save-btn-positions,
+#save-btn-settings {
+    background-color: #28a745; /* 保存操作色：绿色 */
+}
+
+#save-btn-positions:hover,
+#save-btn-settings:hover {
+    background-color: #218838; /* 绿色按钮的悬停效果 */
 }

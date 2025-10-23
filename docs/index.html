@@ -31,11 +31,10 @@
                 <div class="summary-footer">
                     <p>数据最后更新于 <span id="last-updated-time">...</span></p>
 
-                    <!-- ========== 这里是新增的按钮 ========== -->
-                    <button id="force-refresh-btn">强制刷新</button>
-                    <!-- ==================================== -->
-
-                    <button id="run-workflow-btn-summary">启动云端分析</button>
+                    <!-- ========== 这里给按钮增加了 class="action-btn" ========== -->
+                    <button id="force-refresh-btn" class="action-btn">强制刷新</button>
+                    <button id="run-workflow-btn-summary" class="action-btn">启动云端分析</button>
+                    <!-- ======================================================= -->
                 </div>
             </div>
 
@@ -43,7 +42,9 @@
             <div id="positions-panel" class="tab-panel">
                 <div id="positions-editor"></div>
                 <div class="editor-actions">
-                    <button id="save-btn-positions">保存仓位</button>
+                    <!-- ========== 这里给按钮增加了 class="action-btn" ========== -->
+                    <button id="save-btn-positions" class="action-btn">保存仓位</button>
+                    <!-- ======================================================= -->
                     <div id="status-msg-positions" class="status-msg"></div>
                 </div>
             </div>
@@ -52,7 +53,9 @@
             <div id="settings-panel" class="tab-panel">
                 <div id="settings-editor"></div>
                  <div class="editor-actions">
-                    <button id="save-btn-settings">保存设置</button>
+                    <!-- ========== 这里给按钮增加了 class="action-btn" ========== -->
+                    <button id="save-btn-settings" class="action-btn">保存设置</button>
+                    <!-- ======================================================= -->
                     <div id="status-msg-settings" class="status-msg"></div>
                 </div>
             </div>
