@@ -260,43 +260,111 @@ function displayPortfolio(iniContent) {
 }
 
 /**
+ * (纯前端方案)
+ * 使用 allorigins.win 作为 CORS 代理，从雅虎财经获取期权到期日。
+ * @param {HTMLInputElement} tickerInput - Ticker 输入框元素。
+ * @param {HTMLSelectElement} dateSelect - 日期下拉菜单元素。
+ */
+async function fetchAndPopulateDates(tickerInput, dateSelect) {
+    const ticker = tickerInput.value.trim().toUpperCase();
+    if (!ticker) return;
+
+    // 1. 设置加载中状态
+    dateSelect.disabled = true;
+    dateSelect.innerHTML = '<option>加载中...</option>';
+
+    // 2. 构造请求 URL
+    // 目标 URL，需要进行编码
+    const targetUrl = encodeURIComponent(`https://finance.yahoo.com/quote/${ticker}/options`);
+    // 使用 allorigins.win 代理
+    const proxyUrl = `https://api.allorigins.win/get?url=${targetUrl}`;
+
+    try {
+        // 3. 发起网络请求
+        const response = await fetch(proxyUrl);
+        if (!response.ok) {
+            throw new Error(`网络响应错误: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // allorigins 返回的 HTML 在 'contents' 字段中
+        const htmlContent = data.contents;
+        if (!htmlContent) {
+            throw new Error('代理未能获取到内容，目标网站可能无法访问。');
+        }
+
+        // 4. 从返回的 HTML 中解析数据
+        // 这个正则表达式和之前一样，用于从 HTML 中抓取 JSON 数据
+        const match = htmlContent.match(/root\.App\.main\s*=\s*({.*});/);
+        if (!match) {
+            throw new Error('无法解析页面数据，Ticker可能无效或雅虎页面结构已更改。');
+        }
+
+        const yahooData = JSON.parse(match[1]);
+
+        // 5. 提取日期并填充下拉菜单
+        // 这个路径是关键，如果雅虎改版，这里最可能需要更新
+        const timestamps = yahooData.context.dispatcher.stores.OptionContractsStore.expirationDates;
+
+        if (!timestamps || timestamps.length === 0) {
+            dateSelect.innerHTML = '<option>无可用日期</option>';
+        } else {
+            dateSelect.innerHTML = ''; // 清空
+            // 将 Unix 时间戳 (秒) 转换为 'YYYY-MM-DD' 格式
+            const dates = timestamps.map(ts => new Date(ts * 1000).toISOString().split('T')[0]);
+
+            dates.forEach(dateStr => {
+                const option = document.createElement('option');
+                option.value = dateStr;
+                option.textContent = dateStr;
+                dateSelect.appendChild(option);
+            });
+        }
+        dateSelect.disabled = false; // 启用下拉菜单
+
+    } catch (error) {
+        // 6. 统一处理所有错误
+        console.error('获取期权日期失败:', error);
+        dateSelect.innerHTML = `<option>加载失败</option>`;
+        // 可以在这里显示更详细的错误信息
+        // dateSelect.innerHTML = `<option>错误: ${error.message}</option>`;
+    }
+}
+
+
+/**
  * 在指定分区下添加新行。
- * 如果是期权分区，则创建 Ticker, Date, Strike, Type 等多个输入控件。
- * 否则，创建标准的 Key-Value 输入行。
+ * (此函数与上一个方案中的版本完全相同，核心是为 tickerInput 添加事件监听)
  */
 function addNewRow(sectionDiv) {
     const sectionTitle = sectionDiv.querySelector('h3').textContent;
     const addBtn = sectionDiv.querySelector('.add-btn');
 
     if (sectionTitle === 'OptionsPortfolio') {
-        // --- 创建期权专用的复杂输入行 ---
         const itemDiv = document.createElement('div');
-        itemDiv.className = 'option-item-row'; // 使用新的CSS类
+        itemDiv.className = 'option-item-row';
 
-        // 1. Ticker 输入框
         const tickerInput = document.createElement('input');
         tickerInput.type = 'text';
         tickerInput.placeholder = 'Ticker';
         tickerInput.className = 'option-ticker-input';
 
-        // 2. 到期日下拉菜单
         const dateSelect = document.createElement('select');
         dateSelect.className = 'option-date-select';
-        const expirationDates = generateExpirationDates();
-        expirationDates.forEach(dateStr => {
-            const option = document.createElement('option');
-            option.value = dateStr;
-            option.textContent = dateStr;
-            dateSelect.appendChild(option);
+        dateSelect.disabled = true;
+        dateSelect.innerHTML = '<option>先输入Ticker</option>';
+
+        // 核心逻辑：当 Ticker 输入框内容改变并失焦时，触发数据获取
+        tickerInput.addEventListener('change', () => {
+            fetchAndPopulateDates(tickerInput, dateSelect);
         });
 
-        // 3. 行权价输入框
         const strikeInput = document.createElement('input');
         strikeInput.type = 'number';
         strikeInput.placeholder = 'Strike';
         strikeInput.className = 'option-strike-input';
 
-        // 4. 类型 (Call/Put) 下拉菜单
         const typeSelect = document.createElement('select');
         typeSelect.className = 'option-type-select';
         ['CALL', 'PUT'].forEach(type => {
@@ -306,19 +374,16 @@ function addNewRow(sectionDiv) {
             typeSelect.appendChild(option);
         });
 
-        // 5. 数量输入框 (Value)
         const valueInput = document.createElement('input');
         valueInput.type = 'text';
         valueInput.placeholder = '数量';
         valueInput.className = 'value-input';
 
-        // 6. 删除按钮
         const removeBtn = document.createElement('button');
         removeBtn.textContent = '删除';
         removeBtn.className = 'remove-btn';
         removeBtn.onclick = () => itemDiv.remove();
 
-        // 将所有控件添加到行容器中
         itemDiv.appendChild(tickerInput);
         itemDiv.appendChild(dateSelect);
         itemDiv.appendChild(strikeInput);
@@ -329,29 +394,24 @@ function addNewRow(sectionDiv) {
         sectionDiv.insertBefore(itemDiv, addBtn);
 
     } else {
-        // --- 对于 Portfolio 和其他分区，保持原来的简单输入行 ---
+        // 其他分区逻辑不变
         const itemDiv = document.createElement('div');
         itemDiv.className = 'portfolio-item';
-
         const keyInput = document.createElement('input');
         keyInput.type = 'text';
-        keyInput.placeholder = (sectionTitle === 'Portfolio') ? '股票代码 (例如: AAPL)' : '代码/名称';
+        keyInput.placeholder = '股票代码 (例如: AAPL)';
         keyInput.className = 'key-input';
-
         const valueInput = document.createElement('input');
         valueInput.type = 'text';
         valueInput.placeholder = '数量/值';
         valueInput.className = 'value-input';
-
         const removeBtn = document.createElement('button');
         removeBtn.textContent = '删除';
         removeBtn.className = 'remove-btn';
         removeBtn.onclick = () => itemDiv.remove();
-
         itemDiv.appendChild(keyInput);
         itemDiv.appendChild(valueInput);
         itemDiv.appendChild(removeBtn);
-
         sectionDiv.insertBefore(itemDiv, addBtn);
     }
 }
