@@ -1,7 +1,7 @@
 // --- 全局常量与变量 ---
 const WORKFLOW_FILE_NAME = 'main.yml';
 const CONFIG_FILE_PATH = 'config.ini';
-const TOKEN_STORAGE_KEY = 'github_pat'; // === 新增: 用于 localStorage 的键名 ===
+const TOKEN_STORAGE_KEY = 'github_pat';
 let fileSha = null;
 let token = '';
 let originalIniLines = [];
@@ -34,14 +34,22 @@ const modal = {
     confirmBtn: document.getElementById('modal-confirm-btn'),
     cancelBtn: document.getElementById('modal-cancel-btn'),
 };
-// === 新增: 获取所有退出登录按钮 ===
 const logoutButtons = document.querySelectorAll('.logout-btn');
+
+// ========== 新增: 历史表格弹窗的 DOM 元素 ==========
+const historyModal = {
+    backdrop: document.getElementById('history-modal-backdrop'),
+    container: document.getElementById('history-modal-container'),
+    content: document.getElementById('history-table-content')
+};
+const totalValueDisplay = document.getElementById('total-value-display');
+// ====================================================
 
 // --- 初始化与事件监听 ---
 document.addEventListener('DOMContentLoaded', () => {
     loadInitialSummary();
     setupEventListeners();
-    initializeAuth(); // === 修改: 页面加载时尝试自动登录 ===
+    initializeAuth();
 });
 
 function setupEventListeners() {
@@ -59,35 +67,118 @@ function setupEventListeners() {
     document.getElementById('save-btn-positions').addEventListener('click', savePortfolio);
     document.getElementById('save-btn-settings').addEventListener('click', savePortfolio);
     document.getElementById('force-refresh-btn').addEventListener('click', forceRefreshPage);
-
-    // === 新增: 为所有退出按钮添加事件监听 ===
     logoutButtons.forEach(btn => btn.addEventListener('click', handleLogout));
+
+    // ========== 新增: 历史表格弹窗的事件监听 ==========
+    totalValueDisplay.addEventListener('click', showHistoryTable);
+    historyModal.backdrop.addEventListener('click', hideHistoryTable);
+    // ====================================================
 }
 
-// === 新增: 页面加载时，检查并使用已保存的 Token ===
+// ========== 新增: 显示/隐藏历史表格的函数 ==========
+/**
+ * 异步获取并显示历史数据表格
+ */
+async function showHistoryTable() {
+    // 立即显示弹窗和加载提示
+    historyModal.backdrop.classList.remove('hidden');
+    historyModal.container.classList.remove('hidden');
+    historyModal.content.innerHTML = '<p style="text-align:center; padding: 20px;">正在加载历史数据...</p>';
+
+    try {
+        const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${csvUrl}?t=${timestamp}`);
+
+        if (!response.ok) {
+            throw new Error(`无法加载 CSV 文件 (状态: ${response.status})`);
+        }
+
+        const csvText = await response.text();
+        const tableHtml = parseCsvToHtmlTable(csvText); // 使用辅助函数生成表格
+        historyModal.content.innerHTML = tableHtml;
+
+    } catch (error) {
+        console.error('加载历史数据失败:', error);
+        // 在弹窗内显示错误信息
+        historyModal.content.innerHTML = `<div class="status-error" style="display:block; margin: 20px;">加载失败: ${error.message}</div>`;
+    }
+}
+
+/**
+ * 隐藏历史数据表格
+ */
+function hideHistoryTable() {
+    historyModal.backdrop.classList.add('hidden');
+    historyModal.container.classList.add('hidden');
+    // 清空内容，以便下次打开时重新加载
+    historyModal.content.innerHTML = '';
+}
+
+/**
+ * 将 CSV 文本解析为 HTML 表格字符串
+ * @param {string} csvText - 从文件读取的 CSV 纯文本
+ * @returns {string} - HTML table 元素的字符串
+ */
+function parseCsvToHtmlTable(csvText) {
+    const lines = csvText.trim().split('\n');
+    if (lines.length === 0) return '<p>没有历史数据。</p>';
+
+    let html = '<table class="history-table">';
+
+    // 处理表头
+    const headers = lines[0].split(',');
+    html += '<thead><tr>';
+    headers.forEach(header => {
+        html += `<th>${header.trim().replace(/_/g, ' ')}</th>`; // 将下划线替换为空格，更美观
+    });
+    html += '</tr></thead>';
+
+    // 处理数据行
+    html += '<tbody>';
+    // 从第二行开始，因为第一行是表头
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i]) continue; // 跳过空行
+        const cells = lines[i].split(',');
+        html += '<tr>';
+        cells.forEach(cell => {
+            const trimmedCell = cell.trim();
+            // 尝试将纯数字（尤其是浮点数）格式化
+            const num = Number(trimmedCell);
+            if (!isNaN(num) && trimmedCell.includes('.')) {
+                // 如果是浮点数，格式化为带千位分隔符的两位小数
+                html += `<td>${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+            } else {
+                html += `<td>${trimmedCell}</td>`;
+            }
+        });
+        html += '</tr>';
+    }
+    html += '</tbody>';
+    html += '</table>';
+    return html;
+}
+// ====================================================
+
 function initializeAuth() {
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (storedToken) {
         console.log("检测到已保存的 Token，正在尝试自动登录...");
-        // 直接使用存储的token加载数据，但不显示模态框
         loadDataWithToken(storedToken, true);
     } else {
         console.log("未找到已保存的 Token。");
     }
 }
 
-// === 新增: 处理退出登录的逻辑 ===
 function handleLogout() {
     if (confirm('您确定要清除授权并退出登录吗？这会移除保存在本浏览器的 Token。')) {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         token = '';
         fileSha = null;
-        // 简单地刷新页面，回到初始状态
         window.location.reload();
     }
 }
 
-// === 新增: 更新UI的登录状态 ===
 function setLoggedInUI(isLoggedIn) {
     if (isLoggedIn) {
         logoutButtons.forEach(btn => btn.classList.remove('hidden'));
@@ -96,7 +187,6 @@ function setLoggedInUI(isLoggedIn) {
     }
 }
 
-// --- Tab 与弹窗管理 ---
 function switchTab(tabKey) {
     Object.values(tabButtons).forEach(btn => btn.classList.remove('active'));
     Object.values(panels).forEach(panel => panel.classList.remove('active'));
@@ -127,7 +217,6 @@ function hideTokenModal() {
     pendingTabSwitch = null;
 }
 
-// --- 核心逻辑：授权、加载、保存、运行 ---
 const { owner, repo } = getRepoInfoFromURL();
 
 async function handleTokenConfirm() {
@@ -140,7 +229,6 @@ async function handleTokenConfirm() {
     loadDataWithToken(inputToken);
 }
 
-// === 重构: 将加载数据的逻辑提取出来 ===
 async function loadDataWithToken(tokenToValidate, isAutoAuth = false) {
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${CONFIG_FILE_PATH}`, {
@@ -148,22 +236,20 @@ async function loadDataWithToken(tokenToValidate, isAutoAuth = false) {
         });
 
         if (!response.ok) {
-            // 如果自动授权失败，清除无效的token
             if (isAutoAuth) {
                 localStorage.removeItem(TOKEN_STORAGE_KEY);
                 console.error('自动登录失败: 已保存的 Token 无效或已过期，已自动清除。');
-                setLoggedInUI(false); // 确保退出按钮是隐藏的
-                return; // 静默失败，不打扰用户
+                setLoggedInUI(false);
+                return;
             }
             if (response.status === 401) throw new Error('Token 无效或权限不足。');
             if (response.status === 404) throw new Error('在仓库中未找到 config.ini 文件。');
             throw new Error(`GitHub API 错误: ${response.statusText}`);
         }
 
-        // === 修改: 验证成功后，保存 Token 到全局变量和 localStorage ===
         token = tokenToValidate;
         localStorage.setItem(TOKEN_STORAGE_KEY, token);
-        setLoggedInUI(true); // 显示退出登录按钮
+        setLoggedInUI(true);
 
         const data = await response.json();
         fileSha = data.sha;
@@ -186,7 +272,7 @@ async function loadDataWithToken(tokenToValidate, isAutoAuth = false) {
         if (!isAutoAuth) {
             showTokenModal(`验证失败: ${error.message}`, true);
         }
-        setLoggedInUI(false); // 确保退出按钮是隐藏的
+        setLoggedInUI(false);
     }
 }
 
@@ -244,7 +330,6 @@ async function runWorkflow() {
     }
 }
 
-// --- UI 渲染与数据处理 (这部分函数保持不变) ---
 function displayPortfolio(lines) {
     editors.positions.innerHTML = '';
     editors.settings.innerHTML = '';
@@ -356,7 +441,6 @@ async function loadInitialSummary() {
     const valueChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_value_chart.png`;
     const pieChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_pie_chart.png`;
 
-    const totalValueDisplay = document.getElementById('total-value-display');
     const valueChartImg = document.getElementById('value-chart-img');
     const pieChartImg = document.getElementById('pie-chart-img');
     const lastUpdatedTime = document.getElementById('last-updated-time');
