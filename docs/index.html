@@ -1,4 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投资组合编辑器</title>
+    <!-- 统一链接到外部 style.css 文件，确保这里没有其他 <style> 标签 -->
+    <link rel="stylesheet" href="style.css">
+</head>
 <body>
+
+    <!-- 步骤 1: 将资产概览移到最顶部 -->
+    <div id="summary-container">
+        <h2>资产概览</h2>
+        <p id="total-value-display">总资产：正在加载...</p>
+        <div class="charts-container">
+            <img id="value-chart-img" alt="资产价值变化图 (加载中...)">
+            <img id="pie-chart-img" alt="资产分布饼图 (加载中...)">
+        </div>
+    </div>
 
     <h1>投资组合编辑器</h1>
     <p>一个运行在GitHub Pages上的无服务器编辑器，用于修改仓库中的 `config.ini` 文件并触发GitHub Actions。</p>
@@ -11,15 +30,6 @@
     </div>
 
     <hr>
-
-    <div id="summary-container">
-        <h2>资产概览</h2>
-        <p id="total-value-display">总资产：正在加载...</p>
-        <div class="charts-container">
-            <img id="value-chart-img" alt="资产价值变化图 (加载中...)">
-            <img id="pie-chart-img" alt="资产分布饼图 (加载中...)">
-        </div>
-    </div>
 
     <h2>2. 操作</h2>
     <button id="load-btn">加载当前持仓</button>
@@ -37,3 +47,4 @@
     <!-- 确保 script.js 的引用在 body 底部 -->
     <script src="script.js"></script>
 </body>
+</html>
