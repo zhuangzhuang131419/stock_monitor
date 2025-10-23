@@ -60,7 +60,13 @@ async function loadPortfolio() {
 
         const data = await response.json();
         fileSha = data.sha; // 保存 SHA 以便后续更新
-        const content = atob(data.content); // Base64 解码
+        const binaryString = atob(data.content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        const decoder = new TextDecoder('utf-8');
+        const content = decoder.decode(bytes);
 
         displayPortfolio(content);
         updateStatus('持仓已成功加载！', false);
@@ -87,7 +93,11 @@ async function savePortfolio() {
     updateStatus('正在保存...');
 
     const newContent = buildIniStringFromUI();
-    const newContentBase64 = btoa(newContent); // Base64 编码
+    // 使用 TextEncoder 和 btoa 的组合来正确编码包含中文的字符串
+    const encoder = new TextEncoder();
+    const uint8array = encoder.encode(newContent);
+    const binaryString = String.fromCharCode.apply(null, uint8array);
+    const newContentBase64 = btoa(binaryString);
 
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${CONFIG_FILE_PATH}`, {
