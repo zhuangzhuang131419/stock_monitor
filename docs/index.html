@@ -22,8 +22,14 @@
             <!-- 资产概览面板 -->
             <div id="summary-panel" class="tab-panel active">
                 <div id="summary-container">
-                    <!-- ========== 修改: 增加了 clickable-summary 类 ========== -->
                     <p id="total-value-display" class="clickable-summary">总资产：正在加载...</p>
+
+                    <!-- ========== 新增: 收益率展示容器 ========== -->
+                    <div id="returns-display" class="returns-container">
+                        <!-- 收益率数据将由 JS 动态加载 -->
+                    </div>
+                    <!-- ========================================== -->
+
                     <div class="charts-container">
                         <img id="value-chart-img" alt="资产价值变化图 (加载中...)">
                         <img id="pie-chart-img" alt="资产分布饼图 (加载中...)">
@@ -71,14 +77,13 @@
         </div>
     </div>
 
-    <!-- ========== 新增: 历史数据表格弹窗 ========== -->
+    <!-- 历史数据表格弹窗 -->
     <div id="history-modal-backdrop" class="modal-backdrop-new hidden"></div>
     <div id="history-modal-container" class="hidden">
         <div id="history-table-content">
             <!-- 表格将由 JS 动态生成并插入此处 -->
         </div>
     </div>
-    <!-- ========================================== -->
 
     <script src="script.js"></script>
 </body>

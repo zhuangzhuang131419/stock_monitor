@@ -10,11 +10,9 @@ body {
     box-sizing: border-box;
 }
 
-/* ========== 新增: 禁止 body 滚动 ========== */
 body.modal-open {
     overflow: hidden;
 }
-/* ========================================== */
 
 .main-container {
     max-width: 1200px;
@@ -76,7 +74,7 @@ body.modal-open {
     font-weight: 700;
     color: #2c3e50;
     text-align: center;
-    margin: 15px 0 40px 0;
+    margin: 15px 0 25px 0; /* 调整了下边距 */
 }
 .clickable-summary {
     cursor: pointer;
@@ -86,6 +84,59 @@ body.modal-open {
 .clickable-summary:hover {
     color: #007bff;
 }
+
+/* ========== 新增: 收益率展示样式 ========== */
+.returns-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap; /* 在小屏幕上换行 */
+    gap: 16px; /* 项目之间的间距 */
+    margin: 0 0 40px 0; /* 调整与下方图表的间距 */
+    padding: 0 20px;
+}
+
+.return-item {
+    text-align: center;
+    padding: 8px 12px;
+    background-color: #f7f9fa;
+    border-radius: 8px;
+    border: 1px solid #e1e4e8;
+    min-width: 120px; /* 保证每个项目有最小宽度 */
+    transition: all 0.2s ease;
+}
+
+.return-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.return-label {
+    display: block;
+    font-size: 14px; /* 正文大小 */
+    color: #586069; /* 标签颜色 */
+    margin-bottom: 4px;
+}
+
+.return-value {
+    display: block;
+    font-size: 18px; /* 让数值比标签稍大，更显眼 */
+    font-weight: 600; /* 加粗 */
+}
+
+.return-value.positive {
+    color: #28a745; /* 绿色代表正收益 */
+}
+
+.return-value.positive::before {
+    content: '+'; /* 为正数添加 '+' 号 */
+}
+
+.return-value.negative {
+    color: #d73a49; /* 红色代表负收益 */
+}
+/* ========================================== */
+
 
 .charts-container {
     text-align: center;
@@ -217,6 +268,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     .content-area { padding: 20px; }
     .charts-container img { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
+    .returns-container { gap: 10px; } /* 移动端减小间距 */
+    .return-item { min-width: 100px; }
 }
 
 /* --- 全局操作按钮统一样式 --- */
@@ -251,7 +304,7 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     background-color: #5a6268;
 }
 
-/* ========== 修改: 历史表格弹窗样式 ========== */
+/* --- 历史表格弹窗样式 --- */
 .modal-backdrop-new {
     position: fixed;
     top: 0; left: 0;
@@ -280,7 +333,6 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-/* 当弹窗激活时，改变透明度和大小，触发动画 */
 .modal-backdrop-new.is-active,
 #history-modal-container.is-active {
     opacity: 1;
@@ -318,4 +370,3 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 .history-table tbody tr:hover {
     background-color: #f1f3f5;
 }
-/* ========================================== */
