@@ -73,9 +73,11 @@ yfinance
 urllib3
 datetime
 ```
-
----
 依赖安装后直接运行main.py即可
+```bash
+python main.py
+```
+
 ---
 
 ## ☁️ 部署与自动化执行
