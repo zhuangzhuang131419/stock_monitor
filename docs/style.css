@@ -224,3 +224,10 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 #save-btn-settings:hover {
     background-color: #218838; /* 绿色按钮的悬停效果 */
 }
+
+.logout-btn {
+    background-color: #6c757d; /* 一个中性的灰色 */
+}
+.logout-btn:hover {
+    background-color: #5a6268; /* 悬停时颜色变深 */
+}

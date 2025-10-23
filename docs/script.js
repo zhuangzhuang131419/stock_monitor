@@ -1,10 +1,11 @@
 // --- 全局常量与变量 ---
 const WORKFLOW_FILE_NAME = 'main.yml';
 const CONFIG_FILE_PATH = 'config.ini';
+const TOKEN_STORAGE_KEY = 'github_pat'; // === 新增: 用于 localStorage 的键名 ===
 let fileSha = null;
 let token = '';
 let originalIniLines = [];
-let pendingTabSwitch = null; // 用于记录用户想要切换到的 Tab
+let pendingTabSwitch = null;
 
 // --- DOM 元素获取 ---
 const tabButtons = {
@@ -33,11 +34,14 @@ const modal = {
     confirmBtn: document.getElementById('modal-confirm-btn'),
     cancelBtn: document.getElementById('modal-cancel-btn'),
 };
+// === 新增: 获取所有退出登录按钮 ===
+const logoutButtons = document.querySelectorAll('.logout-btn');
 
 // --- 初始化与事件监听 ---
 document.addEventListener('DOMContentLoaded', () => {
     loadInitialSummary();
     setupEventListeners();
+    initializeAuth(); // === 修改: 页面加载时尝试自动登录 ===
 });
 
 function setupEventListeners() {
@@ -54,10 +58,42 @@ function setupEventListeners() {
     document.getElementById('run-workflow-btn-summary').addEventListener('click', requestRunWorkflow);
     document.getElementById('save-btn-positions').addEventListener('click', savePortfolio);
     document.getElementById('save-btn-settings').addEventListener('click', savePortfolio);
-
-    // ========== 这里是新增的事件监听 ==========
     document.getElementById('force-refresh-btn').addEventListener('click', forceRefreshPage);
-    // =======================================
+
+    // === 新增: 为所有退出按钮添加事件监听 ===
+    logoutButtons.forEach(btn => btn.addEventListener('click', handleLogout));
+}
+
+// === 新增: 页面加载时，检查并使用已保存的 Token ===
+function initializeAuth() {
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (storedToken) {
+        console.log("检测到已保存的 Token，正在尝试自动登录...");
+        // 直接使用存储的token加载数据，但不显示模态框
+        loadDataWithToken(storedToken, true);
+    } else {
+        console.log("未找到已保存的 Token。");
+    }
+}
+
+// === 新增: 处理退出登录的逻辑 ===
+function handleLogout() {
+    if (confirm('您确定要清除授权并退出登录吗？这会移除保存在本浏览器的 Token。')) {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        token = '';
+        fileSha = null;
+        // 简单地刷新页面，回到初始状态
+        window.location.reload();
+    }
+}
+
+// === 新增: 更新UI的登录状态 ===
+function setLoggedInUI(isLoggedIn) {
+    if (isLoggedIn) {
+        logoutButtons.forEach(btn => btn.classList.remove('hidden'));
+    } else {
+        logoutButtons.forEach(btn => btn.classList.add('hidden'));
+    }
 }
 
 // --- Tab 与弹窗管理 ---
@@ -101,19 +137,34 @@ async function handleTokenConfirm() {
         return;
     }
     updateStatus('正在验证 Token 并加载数据...', false, 'modal');
+    loadDataWithToken(inputToken);
+}
 
+// === 重构: 将加载数据的逻辑提取出来 ===
+async function loadDataWithToken(tokenToValidate, isAutoAuth = false) {
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${CONFIG_FILE_PATH}`, {
-            headers: { 'Authorization': `token ${inputToken}` }
+            headers: { 'Authorization': `token ${tokenToValidate}` }
         });
 
         if (!response.ok) {
+            // 如果自动授权失败，清除无效的token
+            if (isAutoAuth) {
+                localStorage.removeItem(TOKEN_STORAGE_KEY);
+                console.error('自动登录失败: 已保存的 Token 无效或已过期，已自动清除。');
+                setLoggedInUI(false); // 确保退出按钮是隐藏的
+                return; // 静默失败，不打扰用户
+            }
             if (response.status === 401) throw new Error('Token 无效或权限不足。');
             if (response.status === 404) throw new Error('在仓库中未找到 config.ini 文件。');
             throw new Error(`GitHub API 错误: ${response.statusText}`);
         }
 
-        token = inputToken; // 验证成功，保存 Token
+        // === 修改: 验证成功后，保存 Token 到全局变量和 localStorage ===
+        token = tokenToValidate;
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        setLoggedInUI(true); // 显示退出登录按钮
+
         const data = await response.json();
         fileSha = data.sha;
         const content = decodeURIComponent(escape(atob(data.content)));
@@ -121,16 +172,24 @@ async function handleTokenConfirm() {
 
         displayPortfolio(originalIniLines);
 
-        const tabToSwitch = pendingTabSwitch;
-        hideTokenModal();
-        if (tabToSwitch) {
-            switchTab(tabToSwitch);
+        if (!isAutoAuth) {
+            const tabToSwitch = pendingTabSwitch;
+            hideTokenModal();
+            if (tabToSwitch) {
+                switchTab(tabToSwitch);
+            }
         }
+        console.log("授权成功，数据已加载。");
+
     } catch (error) {
         console.error(error);
-        showTokenModal(`验证失败: ${error.message}`, true);
+        if (!isAutoAuth) {
+            showTokenModal(`验证失败: ${error.message}`, true);
+        }
+        setLoggedInUI(false); // 确保退出按钮是隐藏的
     }
 }
+
 
 async function savePortfolio() {
     if (!token || !fileSha) {
@@ -185,7 +244,7 @@ async function runWorkflow() {
     }
 }
 
-// --- UI 渲染与数据处理 ---
+// --- UI 渲染与数据处理 (这部分函数保持不变) ---
 function displayPortfolio(lines) {
     editors.positions.innerHTML = '';
     editors.settings.innerHTML = '';
@@ -471,18 +530,8 @@ function buildIniStringFromUI() {
     return tempLines.join('\n');
 }
 
-// ========== 这里是新增的函数 ==========
-/**
- * 强制刷新页面，通过添加时间戳绕过微信等环境的缓存
- */
 function forceRefreshPage() {
-    // 获取当前页面的基本路径，不包含任何查询参数或哈希
     const baseUrl = window.location.origin + window.location.pathname;
-
-    // 构建一个带有新时间戳的 URL
     const newUrl = `${baseUrl}?t=${new Date().getTime()}`;
-
-    // 跳转到新 URL，强制浏览器重新加载
     window.location.href = newUrl;
 }
-// ===================================
