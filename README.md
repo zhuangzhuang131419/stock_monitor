@@ -78,12 +78,9 @@ datetime
 ## ☁️ 部署与自动化执行
 
 1. 将项目 Fork 或 Clone 到你自己的 GitHub 仓库；
-2. 在 `.github/workflows/main.yml` 中根据需要修改：
-   - 调度频率（`cron`）
-   - 分析脚本路径
-   - 输出文件名
-3. 提交并推送后，GitHub Actions 会定时自动运行；
-4. 运行完成后，在仓库中可查看最新分析结果。
+2. 调整config.ini中的仓位；
+3. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
+4. 运行完成后，在仓库中的输出文件可查看最新分析结果。
 
 ---
 
