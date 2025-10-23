@@ -425,7 +425,7 @@ function getRepoInfoFromURL() {
 // ========== 主要修改: 拆分出加载收益率的函数 ==========
 
 /**
- * 异步获取并展示投资回报率数据
+ * 异步获取并展示投资回报率、盈利和增值数据
  */
 async function loadReturnsData() {
     const returnsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_return.json`;
@@ -445,32 +445,68 @@ async function loadReturnsData() {
             return;
         }
 
-        returnsDisplayContainer.innerHTML = '';
+        returnsDisplayContainer.innerHTML = ''; // 清空加载提示
 
         returnsData.forEach(item => {
-            const returnValue = item.return;
-            const period = item.period;
+            const { period, return: returnValue, profit, growth } = item;
 
             const itemDiv = document.createElement('div');
             itemDiv.className = 'return-item';
 
-            const labelSpan = document.createElement('span');
-            labelSpan.className = 'return-label';
-            labelSpan.textContent = period;
+            // --- 周期标签 (例如 "本周至今") ---
+            const periodLabel = document.createElement('span');
+            periodLabel.className = 'return-label';
+            periodLabel.textContent = period;
+            itemDiv.appendChild(periodLabel);
 
-            const valueSpan = document.createElement('span');
-            valueSpan.className = 'return-value';
+            // --- 创建带颜色数值的辅助函数 ---
+            const createValueSpan = (value, isPercent) => {
+                const span = document.createElement('span');
+                const sign = value > 0 ? '+' : '';
+                let text;
+                if (isPercent) {
+                    text = `${sign}${(value * 100).toFixed(2)}%`;
+                } else {
+                    text = `${sign}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                }
+                span.textContent = text;
 
-            if (returnValue > 0) {
-                valueSpan.classList.add('positive');
-            } else if (returnValue < 0) {
-                valueSpan.classList.add('negative');
-            }
+                // 添加颜色类
+                if (value > 0) {
+                    span.classList.add('positive');
+                } else if (value < 0) {
+                    span.classList.add('negative');
+                }
+                return span;
+            };
 
-            valueSpan.textContent = `${(returnValue * 100).toFixed(2)}%`;
+            // --- 1. 收益率 (Return) ---
+            const returnValueSpan = createValueSpan(returnValue, true);
+            returnValueSpan.classList.add('return-value'); // 使用这个类来定义大号字体
+            itemDiv.appendChild(returnValueSpan);
 
-            itemDiv.appendChild(labelSpan);
-            itemDiv.appendChild(valueSpan);
+            // --- 2. 盈利 (Profit) ---
+            const profitDiv = document.createElement('div');
+            profitDiv.className = 'detail-line';
+            const profitLabel = document.createElement('span');
+            profitLabel.className = 'detail-label';
+            profitLabel.textContent = '盈利';
+            const profitValueSpan = createValueSpan(profit, false);
+            profitValueSpan.classList.add('detail-value');
+            profitDiv.append(profitLabel, profitValueSpan);
+            itemDiv.appendChild(profitDiv);
+
+            // --- 3. 增值 (Growth) ---
+            const growthDiv = document.createElement('div');
+            growthDiv.className = 'detail-line';
+            const growthLabel = document.createElement('span');
+            growthLabel.className = 'detail-label';
+            growthLabel.textContent = '增值';
+            const growthValueSpan = createValueSpan(growth, false);
+            growthValueSpan.classList.add('detail-value');
+            growthDiv.append(growthLabel, growthValueSpan);
+            itemDiv.appendChild(growthDiv);
+
             returnsDisplayContainer.appendChild(itemDiv);
         });
 
