@@ -117,9 +117,11 @@ async function handleTokenConfirm() {
 
         displayPortfolio(originalIniLines);
 
-        hideTokenModal();
-        if (pendingTabSwitch) {
-            switchTab(pendingTabSwitch);
+        // 优化点 2: 修复授权后不能自动切换 Tab 的问题
+        const tabToSwitch = pendingTabSwitch; // 先把要切换的目标存起来
+        hideTokenModal(); // 再关闭弹窗（这个操作会清空 pendingTabSwitch）
+        if (tabToSwitch) {
+            switchTab(tabToSwitch); // 切换到之前存储的目标 Tab
         }
     } catch (error) {
         console.error(error);
@@ -136,7 +138,7 @@ async function savePortfolio() {
     const activePanelKey = panels.positions.classList.contains('active') ? 'positions' : 'settings';
     updateStatus('正在验证并保存...', false, activePanelKey);
 
-    // ... (验证逻辑基本不变)
+    // ... (验证逻辑未改变)
     let isValid = true;
     const errorMessages = [];
     document.querySelectorAll('input.invalid, select.invalid').forEach(el => el.classList.remove('invalid'));
@@ -203,9 +205,12 @@ function displayPortfolio(lines) {
             sectionDiv.className = 'portfolio-section';
             sectionDiv.innerHTML = `<h3>${currentSection}</h3>`;
 
-            let targetEditor = editors.settings;
+            // 优化点 3: 定义哪些 section 属于“仓位更新”
+            const positionSections = ['Portfolio', 'OptionsPortfolio', 'Cash'];
+            const targetEditor = positionSections.includes(currentSection) ? editors.positions : editors.settings;
+
+            // 只为可以动态增加的 section 添加“新增”按钮
             if (['Portfolio', 'OptionsPortfolio'].includes(currentSection)) {
-                targetEditor = editors.positions;
                 const addBtn = document.createElement('button');
                 addBtn.textContent = '＋ 新增一行';
                 addBtn.className = 'add-btn';
@@ -213,12 +218,15 @@ function displayPortfolio(lines) {
                 sectionDiv.appendChild(addBtn);
             }
             targetEditor.appendChild(sectionDiv);
+
         } else if (currentSection && processedLine.includes('=')) {
-            const parentEditor = ['Portfolio', 'OptionsPortfolio'].includes(currentSection) ? editors.positions : editors.settings;
+            // 优化点 3: 确保从正确的父面板（仓位/设置）中查找 section
+            const positionSections = ['Portfolio', 'OptionsPortfolio', 'Cash'];
+            const parentEditor = positionSections.includes(currentSection) ? editors.positions : editors.settings;
             const sectionDiv = Array.from(parentEditor.querySelectorAll('.portfolio-section h3')).find(h3 => h3.textContent === currentSection)?.parentElement;
             if (!sectionDiv) return;
 
-            // --- 此处开始的渲染逻辑与之前版本完全相同 ---
+            // --- 此处开始的渲染逻辑未改变 ---
             const [key, value] = processedLine.split('=').map(s => s.trim());
             if (!key || typeof value === 'undefined') return;
             let itemDiv;
@@ -261,7 +269,7 @@ function displayPortfolio(lines) {
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = '删除'; removeBtn.className = 'remove-btn'; removeBtn.onclick = () => itemDiv.remove();
                 itemDiv.append(keyInput, valueInput, removeBtn);
-            } else {
+            } else { // Cash 和其他设置里的项会进入这里
                 itemDiv = document.createElement('div');
                 itemDiv.className = 'portfolio-item-static';
                 const label = document.createElement('label');
@@ -343,8 +351,7 @@ async function loadInitialSummary() {
     }
 }
 
-// --- createOptionRowUI, addNewRow, buildIniStringFromUI 函数与之前版本完全相同，此处省略以节省篇幅 ---
-// --- 您可以将上一版本中的这些函数直接复制到这里 ---
+// --- createOptionRowUI, addNewRow, buildIniStringFromUI 函数与之前版本完全相同 ---
 function createOptionRowUI(ticker = '', date = '', strike = '', type = 'CALL', quantity = '') {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'option-item-row';

@@ -10,8 +10,9 @@ body {
     box-sizing: border-box;
 }
 
+/* 优化点 1: 增大了主容器的最大宽度，以便更好地展示图表 */
 .main-container {
-    max-width: 850px;
+    max-width: 1200px; /* 原为 850px */
     margin: 0 auto;
     background-color: #ffffff;
     border-radius: 12px;
@@ -50,7 +51,7 @@ body {
 
 /* --- 内容区域与面板 --- */
 .content-area {
-    padding: 25px;
+    padding: 25px 35px; /* 增加了左右内边距 */
 }
 .tab-panel {
     display: none;
@@ -66,25 +67,30 @@ body {
 
 /* --- 资产概览面板 --- */
 #total-value-display {
-    font-size: 36px;
+    font-size: 42px; /* 增大字号 */
     font-weight: 700;
     color: #2c3e50;
     text-align: center;
-    margin: 15px 0 30px 0;
+    margin: 15px 0 40px 0; /* 增加底部间距 */
 }
+/* 优化点 1: 移除 flex 布局，让图表自然垂直排列 */
 .charts-container {
-    display: flex;
-    justify-content: space-around;
-    flex-wrap: wrap;
-    gap: 20px;
+    text-align: center; /* 辅助居中 */
 }
+/* 优化点 1: 让图表占据更大宽度并有合适的间距 */
 .charts-container img {
-    max-width: 48%;
+    max-width: 90%; /* 原为 48%，现在更宽更清晰 */
+    display: block;
+    margin: 0 auto 25px auto; /* 居中并添加底部间距 */
     height: auto;
     border: 1px solid #e1e4e8;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.06);
 }
+.charts-container img:last-child {
+    margin-bottom: 0; /* 移除最后一个图表的底部间距 */
+}
+
 .summary-footer {
     text-align: center;
     margin-top: 30px;
@@ -212,7 +218,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 /* --- 响应式适配 --- */
 @media (max-width: 768px) {
     body { padding: 0; }
-    .main-container { border-radius: 0; }
+    .main-container { border-radius: 0; max-width: 100%; } /* 移动端占满宽度 */
+    .content-area { padding: 20px; } /* 调整移动端内边距 */
     .charts-container img { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
 }
