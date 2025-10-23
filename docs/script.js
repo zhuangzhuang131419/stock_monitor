@@ -260,60 +260,54 @@ function displayPortfolio(iniContent) {
 }
 
 /**
- * (纯前端方案)
+ * (纯前端调试版)
  * 使用 allorigins.win 作为 CORS 代理，从雅虎财经获取期权到期日。
- * @param {HTMLInputElement} tickerInput - Ticker 输入框元素。
- * @param {HTMLSelectElement} dateSelect - 日期下拉菜单元素。
+ * 增加了详细的控制台日志，以便于排查问题。
  */
 async function fetchAndPopulateDates(tickerInput, dateSelect) {
     const ticker = tickerInput.value.trim().toUpperCase();
     if (!ticker) return;
 
-    // 1. 设置加载中状态
     dateSelect.disabled = true;
     dateSelect.innerHTML = '<option>加载中...</option>';
 
-    // 2. 构造请求 URL
-    // 目标 URL，需要进行编码
     const targetUrl = encodeURIComponent(`https://finance.yahoo.com/quote/${ticker}/options`);
-    // 使用 allorigins.win 代理
     const proxyUrl = `https://api.allorigins.win/get?url=${targetUrl}`;
 
     try {
-        // 3. 发起网络请求
-        const response = await fetch(proxyUrl);
+        const response = await fetch(proxyUrl, { cache: 'no-cache' }); // 添加 no-cache 避免浏览器缓存旧的失败请求
         if (!response.ok) {
-            throw new Error(`网络响应错误: ${response.statusText}`);
+            throw new Error(`代理服务网络响应错误: ${response.statusText} (状态码: ${response.status})`);
         }
 
         const data = await response.json();
-
-        // allorigins 返回的 HTML 在 'contents' 字段中
         const htmlContent = data.contents;
+
+        // --- 关键调试步骤 ---
+        // 在控制台打印从代理获取到的原始 HTML 内容
+        console.log('--- 从代理获取的原始HTML内容 ---');
+        console.log(htmlContent);
+        console.log('------------------------------');
+
         if (!htmlContent) {
-            throw new Error('代理未能获取到内容，目标网站可能无法访问。');
+            throw new Error('代理未能获取到任何内容。目标网站可能拒绝了代理的访问，或者Ticker无效。');
         }
 
-        // 4. 从返回的 HTML 中解析数据
-        // 这个正则表达式和之前一样，用于从 HTML 中抓取 JSON 数据
-        const match = htmlContent.match(/root\.App\.main\s*=\s*({.*});/);
-        if (!match) {
-            throw new Error('无法解析页面数据，Ticker可能无效或雅虎页面结构已更改。');
+        // 使用一个稍微更健壮的非贪婪正则表达式
+        const match = htmlContent.match(/root\.App\.main\s*=\s*({.*?});/);
+        if (!match || !match[1]) {
+            throw new Error('无法在返回的HTML中找到 "root.App.main" 数据块。雅虎财经页面结构可能已更新。');
         }
 
         const yahooData = JSON.parse(match[1]);
 
-        // 5. 提取日期并填充下拉菜单
-        // 这个路径是关键，如果雅虎改版，这里最可能需要更新
-        const timestamps = yahooData.context.dispatcher.stores.OptionContractsStore.expirationDates;
+        const timestamps = yahooData?.context?.dispatcher?.stores?.OptionContractsStore?.expirationDates;
 
         if (!timestamps || timestamps.length === 0) {
             dateSelect.innerHTML = '<option>无可用日期</option>';
         } else {
-            dateSelect.innerHTML = ''; // 清空
-            // 将 Unix 时间戳 (秒) 转换为 'YYYY-MM-DD' 格式
+            dateSelect.innerHTML = '';
             const dates = timestamps.map(ts => new Date(ts * 1000).toISOString().split('T')[0]);
-
             dates.forEach(dateStr => {
                 const option = document.createElement('option');
                 option.value = dateStr;
@@ -321,14 +315,13 @@ async function fetchAndPopulateDates(tickerInput, dateSelect) {
                 dateSelect.appendChild(option);
             });
         }
-        dateSelect.disabled = false; // 启用下拉菜单
+        dateSelect.disabled = false;
 
     } catch (error) {
-        // 6. 统一处理所有错误
-        console.error('获取期权日期失败:', error);
-        dateSelect.innerHTML = `<option>加载失败</option>`;
-        // 可以在这里显示更详细的错误信息
-        // dateSelect.innerHTML = `<option>错误: ${error.message}</option>`;
+        // --- 增强的错误处理 ---
+        console.error('获取期权日期时发生严重错误:', error);
+        // 在UI上给用户更明确的指示
+        dateSelect.innerHTML = `<option>加载失败,请按F12查看控制台</option>`;
     }
 }
 
