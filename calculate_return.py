@@ -3,10 +3,8 @@ from datetime import datetime
 import json
 
 # --- 配置 ---
-HISTORY_FILE = 'portfolio_details_history.csv'  # 您的历史数据文件名
-OUTPUT_FILE = 'portfolio_return.json'         # <--- 新增：给前端读取的JSON文件名
-# --- 新增配置: 定义哪些列是资产 ---
-# (除了 'total_value' 和 'date' 之外的所有列)
+HISTORY_FILE = 'portfolio_details_history.csv'
+OUTPUT_FILE = 'portfolio_return.json'
 EXCLUDE_COLS_FROM_SUM = ['total_value']
 
 
@@ -22,7 +20,6 @@ def parse_cell(cell):
                 value = float(parts[0].strip())
                 price = float(parts[1].strip())
                 return value, price
-        # 处理普通数字或纯价值字符串
         return float(cell), 0.0
     except (ValueError, TypeError, AttributeError):
         return 0.0, 0.0
@@ -36,7 +33,6 @@ def calculate_inferred_cash_flows(df):
     df['investment_gain'] = 0.0
     df['inferred_cash_flow'] = 0.0
 
-    # 获取所有需要计算的资产列
     asset_columns = [col for col in df.columns if col not in ['total_value', 'investment_gain', 'inferred_cash_flow']]
 
     for i in range(1, len(df)):
@@ -68,7 +64,7 @@ def calculate_inferred_cash_flows(df):
 
 def calculate_period_return(df_with_flows, start_date, end_date, period_name):
     """
-    计算指定时间段内的回报率。
+    计算指定时间段内的回报率、收益和增值。
     """
     try:
         period_start_day_loc = df_with_flows.index.searchsorted(start_date, side='left')
@@ -96,7 +92,11 @@ def calculate_period_return(df_with_flows, start_date, end_date, period_name):
         initial_investment = period_df.iloc[0]['total_value'] - period_df.iloc[0]['investment_gain']
         net_cash_flow += initial_investment
 
+    # '收益 (profit)' = market_gain
     market_gain = end_value - start_value - net_cash_flow
+
+    # <<< 新增: '增值 (growth)' >>>
+    growth = end_value - start_value
 
     denominator = start_value + net_cash_flow
     if abs(denominator) < 1e-6:
@@ -104,6 +104,7 @@ def calculate_period_return(df_with_flows, start_date, end_date, period_name):
     else:
         return_rate = market_gain / denominator
 
+    # <<< 修改: 在返回结果中加入 'Growth' >>>
     return {
         "Period": period_name,
         "Start Date": actual_start_date.strftime('%Y-%m-%d'),
@@ -112,8 +113,9 @@ def calculate_period_return(df_with_flows, start_date, end_date, period_name):
         "Start Value": start_value,
         "End Value": end_value,
         "Inferred Flow": net_cash_flow,
-        "Market Gain": market_gain,
-        "Return": return_rate
+        "Market Gain": market_gain,  # 收益 (profit)
+        "Growth": growth,  # 增值 (growth)
+        "Return": return_rate  # 收益率 (return)
     }
 
 
@@ -188,41 +190,51 @@ def main():
         print("未能计算任何周期的收益率。")
         return
 
-    # ---【新增功能】---
-    # 准备一个只包含'period'和'return'的列表，用于生成JSON文件
+    # ---【修改功能】---
+    # 准备包含'period', 'return', 'profit', 'growth'的列表，用于生成JSON文件
     frontend_data = []
     for res in results:
         frontend_data.append({
             "period": res["Period"],
-            "return": res["Return"]  # 使用原始的浮点数值，而不是格式化后的字符串
+            "return": res["Return"],
+            "profit": res["Market Gain"],  # 对应中文'收益'
+            "growth": res["Growth"]  # 对应中文'增值'
         })
 
     # 将数据写入JSON文件
     try:
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            # ensure_ascii=False 保证中文正确显示, indent=2 使得文件格式更美观
             json.dump(frontend_data, f, ensure_ascii=False, indent=2)
         print(f"\n已成功生成前端数据文件: '{OUTPUT_FILE}'")
     except Exception as e:
         print(f"\n错误：无法写入前端数据文件 '{OUTPUT_FILE}': {e}")
-    # ---【新增功能结束】---
+    # ---【修改功能结束】---
 
-    # --- 以下是原有的控制台输出部分，保持不变 ---
+    # --- 以下是控制台输出部分，也做了相应更新 ---
     report_df = pd.DataFrame(results).set_index('Period')
 
+    # <<< 修改: 在报告中加入 'Growth' 列 >>>
     final_columns = ['Start Date', 'End Date', 'Trading Days', 'Start Value', 'End Value', 'Inferred Flow',
-                     'Market Gain', 'Return']
+                     'Market Gain', 'Growth', 'Return']
     report_df = report_df[final_columns]
 
-    for col in ['Start Value', 'End Value', 'Inferred Flow', 'Market Gain']:
-        report_df[col] = report_df[col].map('{:,.2f}'.format)
-    report_df['Return'] = report_df['Return'].map('{:.2%}'.format)
+    # 在列名映射中添加中文，让报告更清晰
+    report_df.rename(columns={
+        'Market Gain': '收益 (Profit)',
+        'Growth': '增值 (Growth)',
+        'Return': '收益率 (Return)'
+    }, inplace=True)
 
-    print("\n" + "=" * 110)
+    # <<< 修改: 格式化新增的 'Growth' 列 >>>
+    for col in ['Start Value', 'End Value', 'Inferred Flow', '收益 (Profit)', '增值 (Growth)']:
+        report_df[col] = report_df[col].map('{:,.2f}'.format)
+    report_df['收益率 (Return)'] = report_df['收益率 (Return)'].map('{:.2%}'.format)
+
+    print("\n" + "=" * 130)
     print("投资组合近似收益率报告 (控制台输出)")
-    print("=" * 110)
+    print("=" * 130)
     print(report_df)
-    print("-" * 110)
+    print("-" * 130)
     print("注意：本报告为近似计算，依赖于每日持仓快照，未考虑日内交易和股息。")
 
 
