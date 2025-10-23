@@ -260,9 +260,9 @@ function displayPortfolio(iniContent) {
 }
 
 /**
- * (纯前端调试版)
- * 使用 allorigins.win 作为 CORS 代理，从雅虎财经获取期权到期日。
- * 增加了详细的控制台日志，以便于排查问题。
+ * (纯前端最终版 - B计划)
+ * 使用 api.codetabs.com/v1/proxy 作为新的CORS代理。
+ * 同样包含15秒的请求超时功能。
  */
 async function fetchAndPopulateDates(tickerInput, dateSelect) {
     const ticker = tickerInput.value.trim().toUpperCase();
@@ -271,36 +271,41 @@ async function fetchAndPopulateDates(tickerInput, dateSelect) {
     dateSelect.disabled = true;
     dateSelect.innerHTML = '<option>加载中...</option>';
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15秒超时
+
+    // --- 1. 修改点：构造新的代理 URL ---
     const targetUrl = encodeURIComponent(`https://finance.yahoo.com/quote/${ticker}/options`);
-    const proxyUrl = `https://api.allorigins.win/get?url=${targetUrl}`;
+    // 注意这里的 URL 结构和参数名 ('quest') 都变了
+    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${targetUrl}`;
 
     try {
-        const response = await fetch(proxyUrl, { cache: 'no-cache' }); // 添加 no-cache 避免浏览器缓存旧的失败请求
+        const response = await fetch(proxyUrl, {
+            signal: controller.signal,
+            cache: 'no-cache'
+        });
+
+        clearTimeout(timeoutId);
+
         if (!response.ok) {
-            throw new Error(`代理服务网络响应错误: ${response.statusText} (状态码: ${response.status})`);
+            throw new Error(`代理服务网络响应错误: ${response.statusText}`);
         }
 
-        const data = await response.json();
-        const htmlContent = data.contents;
-
-        // --- 关键调试步骤 ---
-        // 在控制台打印从代理获取到的原始 HTML 内容
-        console.log('--- 从代理获取的原始HTML内容 ---');
-        console.log(htmlContent);
-        console.log('------------------------------');
+        // --- 2. 修改点：直接获取 HTML 文本 ---
+        // 这个代理直接返回HTML，所以我们用 .text() 而不是 .json()
+        const htmlContent = await response.text();
 
         if (!htmlContent) {
-            throw new Error('代理未能获取到任何内容。目标网站可能拒绝了代理的访问，或者Ticker无效。');
+            throw new Error('代理未能获取到内容，目标网站可能拒绝了访问。');
         }
 
-        // 使用一个稍微更健壮的非贪婪正则表达式
+        // 后续的解析逻辑完全不变
         const match = htmlContent.match(/root\.App\.main\s*=\s*({.*?});/);
         if (!match || !match[1]) {
-            throw new Error('无法在返回的HTML中找到 "root.App.main" 数据块。雅虎财经页面结构可能已更新。');
+            throw new Error('无法解析页面数据，雅虎页面结构可能已更新。');
         }
 
         const yahooData = JSON.parse(match[1]);
-
         const timestamps = yahooData?.context?.dispatcher?.stores?.OptionContractsStore?.expirationDates;
 
         if (!timestamps || timestamps.length === 0) {
@@ -318,10 +323,18 @@ async function fetchAndPopulateDates(tickerInput, dateSelect) {
         dateSelect.disabled = false;
 
     } catch (error) {
-        // --- 增强的错误处理 ---
-        console.error('获取期权日期时发生严重错误:', error);
-        // 在UI上给用户更明确的指示
-        dateSelect.innerHTML = `<option>加载失败,请按F12查看控制台</option>`;
+        clearTimeout(timeoutId);
+
+        if (error.name === 'AbortError') {
+            console.error('获取期权日期失败: 请求超时 (超过15秒)');
+            dateSelect.innerHTML = `<option>加载超时</option>`;
+        } else {
+            console.error('获取期权日期时发生错误:', error);
+            // 如果错误是 "Unexpected token '<' in JSON at position 0"
+            // 这也说明代理返回了HTML，但我们错误地用了 .json() 解析
+            // 现在的 .text() 写法可以避免这个问题
+            dateSelect.innerHTML = `<option>加载失败</option>`;
+        }
     }
 }
 
