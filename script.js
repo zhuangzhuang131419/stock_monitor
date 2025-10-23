@@ -166,34 +166,50 @@ function displayPortfolio(iniContent) {
     let sectionDiv = null;
 
     lines.forEach(line => {
-        line = line.trim();
-        if (line.startsWith('[') && line.endsWith(']')) {
+        // --- 新增逻辑：处理注释 ---
+        // 1. 使用 split('#') 来分割字符串，取第一部分，这样就去掉了'#'及之后的所有内容。
+        // 2. 使用 trim() 去除处理后可能留下的前后空格。
+        const processedLine = line.split('#')[0].trim();
+
+        // 如果处理后是空行（说明原行为空、或者只有注释），则直接跳过这一行
+        if (!processedLine) {
+            return; // 在 forEach 中，return 的作用相当于 for 循环里的 continue
+        }
+        // --- 新增逻辑结束 ---
+
+
+        // 后续的所有逻辑都基于处理过的 processedLine，而不是原始的 line
+        if (processedLine.startsWith('[') && processedLine.endsWith(']')) {
             // 创建新的 section
-            currentSection = line.substring(1, line.length - 1);
+            currentSection = processedLine.substring(1, processedLine.length - 1);
             sectionDiv = document.createElement('div');
             sectionDiv.className = 'portfolio-section';
             sectionDiv.innerHTML = `<h3>${currentSection}</h3>`;
             portfolioEditor.appendChild(sectionDiv);
-        } else if (line.includes('=') && sectionDiv) {
+        } else if (processedLine.includes('=') && sectionDiv) {
             // 在当前 section 中添加键值对
-            const [key, value] = line.split('=').map(s => s.trim());
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'portfolio-item';
+            const [key, value] = processedLine.split('=').map(s => s.trim());
 
-            const label = document.createElement('label');
-            label.setAttribute('for', `input-${currentSection}-${key}`);
-            label.textContent = key;
+            // 增加一个健壮性检查，防止 "key=" 这种不规范格式导致 value 为 undefined
+            if (key && typeof value !== 'undefined') {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'portfolio-item';
 
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.id = `input-${currentSection}-${key}`;
-            input.value = value;
-            input.dataset.section = currentSection;
-            input.dataset.key = key;
+                const label = document.createElement('label');
+                label.setAttribute('for', `input-${currentSection}-${key}`);
+                label.textContent = key;
 
-            itemDiv.appendChild(label);
-            itemDiv.appendChild(input);
-            sectionDiv.appendChild(itemDiv);
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `input-${currentSection}-${key}`;
+                input.value = value;
+                input.dataset.section = currentSection;
+                input.dataset.key = key;
+
+                itemDiv.appendChild(label);
+                itemDiv.appendChild(input);
+                sectionDiv.appendChild(itemDiv);
+            }
         }
     });
 }
