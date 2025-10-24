@@ -81,10 +81,11 @@ python main.py
 ## ☁️ 部署与自动化执行
 
 1. 将项目 Fork 或 Clone 到你自己的 GitHub 仓库；
-2. 调整config.ini中的仓位；
+2. **在repo的settings -> Actions -> General -> 最下面权限改成 Read and write permissions 然后保存**
 3. **清空仓库里已有的portfolio_details_history.csv，里面是我的历史数据，脚本只会append会导致你的数据库被历史数据污染**
-4. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
-5. 运行完成后，在仓库中的输出文件可查看最新分析结果。
+4. 调整config.ini中的仓位；
+5. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
+6. 运行完成后，在仓库中的输出文件可查看最新分析结果。
 
 ---
 
