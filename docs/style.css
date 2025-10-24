@@ -85,20 +85,22 @@ body.modal-open {
     color: #007bff;
 }
 
-/* ========== 收益率展示样式 (最终优化版) ========== */
+/* ========== 收益率展示样式 (最终版) ========== */
 .returns-container {
     display: flex;
     justify-content: center;
     align-items: stretch;
-    flex-wrap: wrap;
-    gap: 12px; /* 【缩小】卡片间距 */
+    gap: 12px;
     margin: 0 0 40px 0;
     padding: 0 20px;
+
+    /* 【核心修改】在PC端，强制不换行！ */
+    flex-wrap: nowrap;
 }
 
 .return-item {
     text-align: center;
-    padding: 10px 14px; /* 【缩小】内边距，使卡片更紧凑 */
+    padding: 10px 14px;
     background-color: #f7f9fa;
     border-radius: 8px;
     border: 1px solid #e1e4e8;
@@ -107,8 +109,8 @@ body.modal-open {
     flex-direction: column;
     justify-content: center;
 
-    /* 【缩小】卡片基准宽度 */
-    flex: 0 1 145px;
+    /* 【核心修改】既然不换行了，就让它们去拉伸填满空间 */
+    flex: 1 1 140px;
 }
 
 .return-item:hover {
@@ -118,25 +120,25 @@ body.modal-open {
 
 .return-label {
     display: block;
-    font-size: 13px; /* 【缩小】字体 */
+    font-size: 13px;
     color: #586069;
-    margin-bottom: 4px; /* 【缩小】间距 */
+    margin-bottom: 4px;
 }
 
 .return-value {
     display: block;
-    font-size: 20px; /* 【缩小】字体 */
+    font-size: 20px;
     font-weight: 600;
-    margin-bottom: 6px; /* 【缩小】间距 */
+    margin-bottom: 6px;
 }
 
 .detail-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 13px; /* 【缩小】字体 */
+    font-size: 13px;
     width: 100%;
-    margin-top: 2px; /* 【缩小】间距 */
+    margin-top: 2px;
 }
 
 .detail-label {
@@ -287,11 +289,16 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     .content-area { padding: 20px; }
     .charts-container img { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
-    .returns-container { gap: 10px; }
+
+    .returns-container {
+        gap: 10px;
+        /* 【核心修改】在移动端，必须把换行许可还给它 */
+        flex-wrap: wrap;
+    }
 
     .return-item {
-        /* 移动端的尺寸也相应调整 */
-        flex: 0 1 125px;
+        /* 移动端可以自由布局 */
+        flex: 1 1 125px;
     }
 }
 
