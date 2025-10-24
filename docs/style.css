@@ -85,20 +85,20 @@ body.modal-open {
     color: #007bff;
 }
 
-/* ========== 收益率展示样式 (最终修正版) ========== */
+/* ========== 收益率展示样式 (最终优化版) ========== */
 .returns-container {
     display: flex;
-    justify-content: center; /* 关键：让成组的卡片在行内居中 */
+    justify-content: center;
     align-items: stretch;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 12px; /* 【缩小】卡片间距 */
     margin: 0 0 40px 0;
     padding: 0 20px;
 }
 
 .return-item {
     text-align: center;
-    padding: 12px 16px;
+    padding: 10px 14px; /* 【缩小】内边距，使卡片更紧凑 */
     background-color: #f7f9fa;
     border-radius: 8px;
     border: 1px solid #e1e4e8;
@@ -107,10 +107,8 @@ body.modal-open {
     flex-direction: column;
     justify-content: center;
 
-    /* 【核心修改】 */
-    /* flex-grow: 0 (禁止拉伸), flex-shrink: 1 (允许收缩), flex-basis: 160px (新的基准宽度) */
-    /* 这可以防止换行后的元素被过度拉伸，同时降低了基准宽度以容纳更多卡片 */
-    flex: 0 1 160px;
+    /* 【缩小】卡片基准宽度 */
+    flex: 0 1 145px;
 }
 
 .return-item:hover {
@@ -120,25 +118,25 @@ body.modal-open {
 
 .return-label {
     display: block;
-    font-size: 14px;
+    font-size: 13px; /* 【缩小】字体 */
     color: #586069;
-    margin-bottom: 6px;
+    margin-bottom: 4px; /* 【缩小】间距 */
 }
 
 .return-value {
     display: block;
-    font-size: 22px;
+    font-size: 20px; /* 【缩小】字体 */
     font-weight: 600;
-    margin-bottom: 8px;
+    margin-bottom: 6px; /* 【缩小】间距 */
 }
 
 .detail-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    font-size: 13px; /* 【缩小】字体 */
     width: 100%;
-    margin-top: 4px;
+    margin-top: 2px; /* 【缩小】间距 */
 }
 
 .detail-label {
@@ -292,8 +290,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     .returns-container { gap: 10px; }
 
     .return-item {
-        /* 在移动端，我们也禁止其主动拉伸，保证布局统一性 */
-        flex: 0 1 130px;
+        /* 移动端的尺寸也相应调整 */
+        flex: 0 1 125px;
     }
 }
 
