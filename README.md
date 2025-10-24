@@ -69,14 +69,14 @@
 
 1.  进入你的仓库，点击 `Settings` -> `Pages`。
 2.  在 `Build and deployment` (构建与部署) 下，将 `Source` (源) 设置为 `Deploy from a branch` (从分支部署)。
-3.  在 `Branch` (分支) 部分，选择 `main` 分支和 `/(root)` 文件夹。
+3.  在 `Branch` (分支) 部分，选择 `main` 分支和 `/(docs)` 文件夹。
 4.  点击 `Save`。
 
 几分钟后，你的仪表盘就会部署在 `https://<你的用户名>.github.io/<你的仓库名>/`。
 
 ### 步骤 2：访问与授权
 
-1.  打开你的 GitHub Pages 网址。首次访问时，页面会显示“正在加载...”。
+1.  打开你的 GitHub Pages 网址。此时可以展示总资产，收益率和堆叠图饼图等信息
 2.  点击顶部的 `仓位更新` 或 `其他设置` 标签页，会弹出一个授权窗口。
 3.  **你需要提供一个 Personal Access Token (PAT) 以便前端页面能代表你读取和修改仓库中的 `config.ini` 文件，以及触发 Actions 工作流。**
     *   **如何创建 PAT**:
