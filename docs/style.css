@@ -74,7 +74,7 @@ body.modal-open {
     font-weight: 700;
     color: #2c3e50;
     text-align: center;
-    margin: 15px 0 25px 0; /* 调整了下边距 */
+    margin: 15px 0 25px 0;
 }
 .clickable-summary {
     cursor: pointer;
@@ -85,12 +85,12 @@ body.modal-open {
     color: #007bff;
 }
 
-/* ========== 修改后的收益率展示样式 ========== */
+/* ========== 收益率展示样式 (最终版) ========== */
 .returns-container {
     display: flex;
     justify-content: center;
-    align-items: stretch; /* 让卡片等高 */
-    flex-wrap: wrap;
+    align-items: stretch;
+    flex-wrap: wrap; /* 允许换行 */
     gap: 16px;
     margin: 0 0 40px 0;
     padding: 0 20px;
@@ -102,11 +102,15 @@ body.modal-open {
     background-color: #f7f9fa;
     border-radius: 8px;
     border: 1px solid #e1e4e8;
-    min-width: 160px; /* 适当加宽以容纳新内容 */
     transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
     justify-content: center;
+
+    /* 【核心修改】 */
+    /* flex-grow: 1 (允许拉伸), flex-shrink: 0 (PC端不允许收缩), flex-basis: 175px (基准宽度) */
+    /* 这能确保卡片会主动填满一行，且宽度不会小于175px，空间不足时会自动换行 */
+    flex: 1 0 175px;
 }
 
 .return-item:hover {
@@ -123,15 +127,14 @@ body.modal-open {
 
 .return-value {
     display: block;
-    font-size: 22px; /* 突出显示收益率 */
+    font-size: 22px;
     font-weight: 600;
-    margin-bottom: 8px; /* 与下方详情留出间距 */
+    margin-bottom: 8px;
 }
 
-/* 新增：盈利和增值行的样式 */
 .detail-line {
     display: flex;
-    justify-content: space-between; /* 标签和数值左右对齐 */
+    justify-content: space-between;
     align-items: center;
     font-size: 14px;
     width: 100%;
@@ -139,14 +142,13 @@ body.modal-open {
 }
 
 .detail-label {
-    color: #3a3f44; /* 标签文字颜色 */
+    color: #3a3f44;
 }
 
 .detail-value {
     font-weight: 500;
 }
 
-/* 核心修改：定义红正绿负的颜色 */
 .positive {
     color: #d73a49; /* 红色代表正值 */
 }
@@ -287,8 +289,14 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     .content-area { padding: 20px; }
     .charts-container img { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
-    .returns-container { gap: 10px; } /* 移动端减小间距 */
-    .return-item { min-width: 100px; }
+    .returns-container { gap: 10px; }
+
+    .return-item {
+        /* 【核心修改】 */
+        /* 在移动端，我们恢复允许收缩(flex-shrink: 1)，并设置一个更小的基准值 */
+        /* 这使得在小屏幕上布局更灵活，可以一行容纳2-3个卡片 */
+        flex: 1 1 130px;
+    }
 }
 
 /* --- 全局操作按钮统一样式 --- */
@@ -330,7 +338,7 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     width: 100%; height: 100%;
     background-color: rgba(36, 41, 46, 0.7);
     z-index: 199;
-    opacity: 0; /* 默认透明 */
+    opacity: 0;
     transition: opacity 0.3s ease;
 }
 
@@ -347,8 +355,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     z-index: 200;
     display: flex;
     flex-direction: column;
-    opacity: 0; /* 默认透明 */
-    transform: translate(-50%, -50%) scale(0.95); /* 默认缩小 */
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -362,7 +370,7 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 
 #history-table-content {
     padding: 25px;
-    overflow-y: auto; /* 内容超出时可滚动 */
+    overflow-y: auto;
     flex-grow: 1;
 }
 
@@ -379,8 +387,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
 .history-table th {
     background-color: #f7f9fa;
     font-weight: 600;
-    position: sticky; /* 表头固定 */
-    top: -25px; /* 补偿父容器的 padding */
+    position: sticky;
+    top: -25px;
     z-index: 1;
 }
 .history-table tbody tr:nth-child(even) {
