@@ -138,12 +138,11 @@ def get_stock_price_yfinance(ticker):
         if not PROXY_IP or not PROXY_PORT: return None
         print(f"  - [yfinance-代理] 正在通过 {PROXY_IP}:{PROXY_PORT} 尝试...")
         try:
-            proxies = {'http': f'http://{PROXY_IP}:{PROXY_PORT}', 'https': f'http://{PROXY_IP}:{PROXY_PORT}'}
-            session = requests.Session();
-            session.proxies.update(proxies);
-            session.verify = False
-            stock = yf.Ticker(yf_ticker, session=session)
-            hist = stock.history(period='5d', auto_adjust=True)
+            stock = yf.Ticker(yf_ticker)
+            proxy_url = f"http://{PROXY_IP}:{PROXY_PORT}"
+            hist = stock.history(period='5d', auto_adjust=True, proxy=proxy_url)
+            # --- 修改结束 ---
+
             if hist.empty: raise ConnectionError("通过代理仍返回空数据。")
             last_trade = hist.iloc[-1];
             price = last_trade['Close']
