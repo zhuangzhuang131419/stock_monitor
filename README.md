@@ -53,9 +53,8 @@
 
 ---
 
-## 📦 本地运行（Python）
+## 📦 本地运行（Python）对网络环境有要求，可以跳过
 
-如果只使用github action自动化则可跳过本地运行步骤。
 本项目依赖于 Python 3.9+，使用以下命令安装依赖：
 
 ```bash
@@ -83,8 +82,9 @@ python main.py
 
 1. 将项目 Fork 或 Clone 到你自己的 GitHub 仓库；
 2. 调整config.ini中的仓位；
-3. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
-4. 运行完成后，在仓库中的输出文件可查看最新分析结果。
+3. **清空仓库里已有的portfolio_details_history.csv，里面是我的历史数据，脚本只会append会导致你的数据库被历史数据污染**
+4. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
+5. 运行完成后，在仓库中的输出文件可查看最新分析结果。
 
 ---
 
