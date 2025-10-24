@@ -85,12 +85,12 @@ body.modal-open {
     color: #007bff;
 }
 
-/* ========== 收益率展示样式 (最终版) ========== */
+/* ========== 收益率展示样式 (最终修正版) ========== */
 .returns-container {
     display: flex;
-    justify-content: center;
+    justify-content: center; /* 关键：让成组的卡片在行内居中 */
     align-items: stretch;
-    flex-wrap: wrap; /* 允许换行 */
+    flex-wrap: wrap;
     gap: 16px;
     margin: 0 0 40px 0;
     padding: 0 20px;
@@ -108,9 +108,9 @@ body.modal-open {
     justify-content: center;
 
     /* 【核心修改】 */
-    /* flex-grow: 1 (允许拉伸), flex-shrink: 0 (PC端不允许收缩), flex-basis: 175px (基准宽度) */
-    /* 这能确保卡片会主动填满一行，且宽度不会小于175px，空间不足时会自动换行 */
-    flex: 1 0 175px;
+    /* flex-grow: 0 (禁止拉伸), flex-shrink: 1 (允许收缩), flex-basis: 160px (新的基准宽度) */
+    /* 这可以防止换行后的元素被过度拉伸，同时降低了基准宽度以容纳更多卡片 */
+    flex: 0 1 160px;
 }
 
 .return-item:hover {
@@ -150,13 +150,13 @@ body.modal-open {
 }
 
 .positive {
-    color: #d73a49; /* 红色代表正值 */
+    color: #d73a49;
 }
 
 .negative {
-    color: #28a745; /* 绿色代表负值 */
+    color: #28a745;
 }
-/* ========================================== */
+/* ================================================== */
 
 
 .charts-container {
@@ -292,10 +292,8 @@ input.invalid { border-color: red !important; background-color: #fff0f0 !importa
     .returns-container { gap: 10px; }
 
     .return-item {
-        /* 【核心修改】 */
-        /* 在移动端，我们恢复允许收缩(flex-shrink: 1)，并设置一个更小的基准值 */
-        /* 这使得在小屏幕上布局更灵活，可以一行容纳2-3个卡片 */
-        flex: 1 1 130px;
+        /* 在移动端，我们也禁止其主动拉伸，保证布局统一性 */
+        flex: 0 1 130px;
     }
 }
 
