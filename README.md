@@ -1,204 +1,148 @@
-# 投资组合自动化分析系统
+# 投资组合自动化分析与仪表盘
 
-本项目提供一个完整的自动化投资组合分析与展示解决方案，包含：
-
-- 🧠 **Python 后端**：执行数据分析、生成图表、输出结果文件；
-- ☁️ **GitHub Actions 自动化工作流**：实现云端定时或手动触发分析；
-- 🌐 **前端仪表盘（HTML/CSS/JS）**：可视化展示资产数据、直接在线修改配置；
-- 📊 **结果文件自动上传与可视化**：包括总资产曲线图、分布饼图、历史明细表等。
+本项目是一个全自动的投资组合分析与可视化解决方案。它结合了强大的 Python 后端分析能力、GitHub Actions 的云端自动化，以及一个交互式的前端仪表盘，让你能够轻松追踪、管理和展示你的个人投资组合。
 
 ---
 
-## 🧩 项目结构
+## ✨ 核心特性
 
-```
-├── .github/
-│   └── workflows/
-│       └── main.yml              # 云端自动分析主流程
-├── config.ini                    # 投资组合与系统配置
-├── portfolio_details_history.csv # 历史资产明细（自动更新）
-├── portfolio_value_chart.png     # 总资产曲线图（自动生成）
-├── portfolio_pie_chart.png       # 资产分布图（自动生成）
-├── requirements.txt              # Python 依赖
-├── analyze_portfolio.py          # 主分析脚本
-├── index.html                    # 前端仪表盘入口
-├── style.css                     # 前端样式文件
-├── script.js                     # 前端逻辑与交互
-└── README.md                     # 项目说明文档（即本文档）
-```
+- 🧠 **Python 智能分析**：自动获取股票与期权的最新价格，计算投资组合的总价值、历史趋势、收益率 (TWRR)、绝对盈利和市值增长。
+- ☁️ **GitHub Actions 自动化**：无需个人电脑或服务器，在云端定时（或手动）执行所有分析任务，并自动将结果更新回你的仓库。
+- 🌐 **交互式前端仪表盘**：通过 GitHub Pages 部署一个现代化的网页界面，直观地展示你的资产总览、历史曲线、分布饼图和各项收益指标。
+- ✍️ **在线配置编辑**：直接在网页上修改你的持仓 (`config.ini`)，一键保存并触发云端更新，告别繁琐的本地文件修改和 `git push`。
+- 🔄 **智能同步更新**：提供一个特制的同步工作流，可以一键从原作者仓库拉取最新功能，同时**完美保留**你自己的所有个人数据（如持仓配置和历史记录）。
 
 ---
 
-## 🚀 核心逻辑流程
+## 🚀 快速上手：部署与自动化执行
 
-1. **配置加载**
-   - 从 `config.ini` 读取投资组合、现金、期权等信息；
-   - 可包含数据源设定（目前包含Yahoo finance和Alpha vantage）。
+请严格按照以下步骤操作，只需几分钟即可完成部署。
 
-2. **数据抓取与分析**
-   - 自动获取股票与期权的实时或历史数据；
-   - 计算总资产和权重占比等关键指标；
-   - 输出表格与图表
+### 步骤 1：Fork 本项目
 
-3. **结果导出**
-   - 输出以下文件至仓库根目录：
-     - `portfolio_details_history.csv`
-     - `portfolio_value_chart.png`
-     - `portfolio_pie_chart.png`
+点击本页面右上角的 **Fork** 按钮，将此项目复制到你自己的 GitHub 账号下。后续所有操作都在你自己的这个新仓库中进行。
 
-4. **GitHub Actions 自动执行**
-   - 工作流文件 `.github/workflows/main.yml` 控制执行；
-   - 可设置手动触发（workflow_dispatch）或定时运行（schedule）；
-   - 分析完成后自动提交并推送结果文件。
+### 步骤 2：<span style="color:red;">**❗️重要：设置仓库权限**</span>
 
----
+这是让自动化工作流能够将分析结果写回你仓库的关键一步。
 
-## 📦 本地运行（Python）对网络环境有要求，可以跳过
+1.  进入你刚刚 Fork 的仓库，点击 `Settings` (设置)。
+2.  在左侧菜单中，找到 `Actions` -> `General`。
+3.  滚动到页面底部的 `Workflow permissions` (工作流权限) 部分。
+4.  **勾选 `Read and write permissions` (读写权限)**。
+5.  点击 `Save` (保存)。
 
-本项目依赖于 Python 3.9+，使用以下命令安装依赖：
+![Actions Permissions](https://user-images.githubusercontent.com/132885883/277884531-01e40775-58d8-44e2-a74c-47402f0a4f5f.png)
 
-```bash
-pip install -r requirements.txt
-```
+### 步骤 3：<span style="color:red;">**❗️❗️❗️极其重要：清空历史数据**</span>
 
-**requirements.txt 内容：**
+原仓库中包含作者的演示历史数据 (`portfolio_details_history.csv`)。**如果不清空，你的首次分析结果会附加在这些旧数据之后，导致数据污染和图表错乱。**
 
-```
-requests
-pandas
-matplotlib
-numpy
-yfinance
-urllib3
-```
-依赖安装后直接运行main.py即可
-```bash
-python main.py
-```
+1.  在你的仓库中，找到 `portfolio_details_history.csv` 文件并点击进入。
+2.  点击文件右上角的 **编辑 (铅笔图标)** 按钮。
+3.  **删除文件内的所有内容**，但保留文件本身。
+4.  点击 `Commit changes` (提交更改)。
+
+### 步骤 4：配置你的持仓
+
+1.  在你的仓库中，找到 `config.ini` 文件并点击进入。
+2.  点击编辑按钮，根据你的实际情况修改以下部分：
+    *   `[Portfolio]`: 你的股票持仓，格式为 `股票代码 = 数量`。
+    *   `[OptionsPortfolio]`: 你的期权持仓，格式为 `底层代码_到期日_行权价_类型 = 数量` (例如 `AAPL_2025-01-17_150_CALL = 10`)。
+    *   `[Cash]`: 你的现金余额，格式为 `amount = 金额`。
+3.  修改完成后，提交更改。
+
+### 步骤 5：启动首次分析
+
+1.  在你的仓库页面顶部，点击 `Actions` 标签页。
+2.  在左侧工作流列表中，点击 `Run Python Script`。
+3.  你会看到一个提示 "This workflow has a workflow_dispatch event"，点击右侧的 `Run workflow` (运行工作流) 按钮。
+4.  等待几分钟，工作流会自动完成数据抓取、分析、图表生成，并将所有结果文件（`.csv`, `.png`, `.json`）更新到你的仓库中。
 
 ---
 
-## ☁️ 部署与自动化执行
+## 🌐 前端仪表盘部署与使用
 
-1. 将项目 Fork 或 Clone 到你自己的 GitHub 仓库；
-2. **在repo的settings -> Actions -> General -> 最下面权限改成 Read and write permissions 然后保存**
-3. **清空仓库里已有的portfolio_details_history.csv，里面是我的历史数据，脚本只会append会导致你的数据库被历史数据污染**
-4. 调整config.ini中的仓位；
-5. 提交并推送后，GitHub Actions 会定时自动运行，也可在Action tab手动触发；
-6. 运行完成后，在仓库中的输出文件可查看最新分析结果。
+部署一个属于你自己的可视化仪表盘，随时随地查看收益，并在线更新持仓。
 
----
+### 步骤 1：启用 GitHub Pages
 
-## 🌐 前端可视化仪表盘（可选，主要方便可视化和修改config.ini）
+1.  进入你的仓库，点击 `Settings` -> `Pages`。
+2.  在 `Build and deployment` (构建与部署) 下，将 `Source` (源) 设置为 `Deploy from a branch` (从分支部署)。
+3.  在 `Branch` (分支) 部分，选择 `main` 分支和 `/(root)` 文件夹。
+4.  点击 `Save`。
 
-> **全新特性：前端可视化与云端联动**
+几分钟后，你的仪表盘就会部署在 `https://<你的用户名>.github.io/<你的仓库名>/`。
 
-项目现已支持通过 **GitHub Pages** 提供在线仪表盘界面，可实现以下功能：
+### 步骤 2：访问与授权
 
-- 查看最新的资产总览、历史曲线与分布饼图；
-- 直接在线编辑 `config.ini`（仓位与设置）；
-- 一键保存修改；
-- 一键触发 GitHub Actions 云端重新分析。
+1.  打开你的 GitHub Pages 网址。首次访问时，页面会显示“正在加载...”。
+2.  点击顶部的 `仓位更新` 或 `其他设置` 标签页，会弹出一个授权窗口。
+3.  **你需要提供一个 Personal Access Token (PAT) 以便前端页面能代表你读取和修改仓库中的 `config.ini` 文件，以及触发 Actions 工作流。**
+    *   **如何创建 PAT**:
+        *   前往你的 GitHub `Settings` -> `Developer settings` -> `Personal access tokens` -> `Tokens (classic)`。
+        *   点击 `Generate new token` -> `Generate new token (classic)`。
+        *   **勾选 `repo` 和 `workflow` 两个权限**。
+        *   生成 Token 后，**立即复制并妥善保管**，因为此页面关闭后将无法再次查看。
+4.  将复制的 PAT 粘贴到弹窗中并确认。Token 将仅保存在你的浏览器本地，不会上传到任何地方。
 
----
-
-### ✅ 部署步骤
-
-1. 确认以下文件在仓库docs文件夹（默认位置即可）：
-   ```
-   index.html
-   style.css
-   script.js
-   ```
-
-2. 在 GitHub 仓库中启用 Pages：
-   - 打开仓库 → Settings → Pages；
-   - 选择 **Branch: main / (docs)**；
-   - 保存后访问 `https://<你的用户名>.github.io/<仓库名>/`。
-
-3. 打开网页后可直接可视化收益率，历史图标和饼图：
-   - 如需经前端修改config.ini需输入你的 **Personal Access Token (PAT)**；
-   - PAT 需具备：
-     - `repo` 权限（读写 contents）
-     - `workflow` 权限（运行 Actions）
-   - 首次输入后将缓存在本地，可在仓位更新和其他设置页面清除缓存
-
-4. 之后访问可：
-   - 在 “资产概览” 标签页查看图表与总资产；
-   - 在 “仓位更新” 或 “其他设置” 标签页修改配置；
-   - 点击 “启动云端分析” 直接触发工作流。
+授权成功后，你就可以在网页上自由地编辑持仓并一键保存了！
 
 ---
 
-### 🖼️ 页面结构概览
+## ⚙️ 工作流详解 (Workflows Explained)
 
-- **资产概览页**  
-  - 显示总资产、趋势图、分布图；
-  - 可一键启动分析；
-  - 自动加载最新的 CSV 数据。
+本项目包含两个核心工作流，位于 `.github/workflows/` 目录下。
 
-- **仓位更新页**  
-  - 可编辑 `[Portfolio]` ， `[OptionsPortfolio]` 和 `[Cash]`；
-  - 支持动态添加、删除项目；
-  - 点击保存仓位保存到 `config.ini`。
+### 核心分析引擎: `run_script.yml`
 
-- **其他设置页**  
-  - 显示其他全局配置；
-  - 亦可保存修改到 `config.ini`。
+这是驱动整个系统自动化分析的核心。
 
-- **Token 授权弹窗**  
-  - 验证用户 GitHub Token；
-  - 成功后自动加载配置。
+- **触发方式**:
+    1.  **定时触发**: 默认配置为美股交易日收盘后自动运行 (可通过 `cron` 表达式修改)。
+    2.  **手动触发**: 你可以随时在 `Actions` 页面手动运行它，或通过前端仪表盘的“更新数据”按钮触发。
+- **工作内容**:
+    1.  启动一个虚拟服务器。
+    2.  安装 Python 和所有必要的依赖库。
+    3.  运行 `main.py` 脚本，获取最新资产价格，生成历史数据 `.csv` 文件和图表 `.png` 文件。
+    4.  运行 `calculate_return.py` 脚本，根据历史数据计算收益率、盈利等，并生成 `.json` 文件供前端使用。
+    5.  将所有新生成或更新的文件自动提交 (commit) 并推送 (push) 回你的仓库。
 
----
+### 智能同步功能: `sync.yml`
 
-### ⚙️ 文件说明
+当你 Fork 项目后，原作者可能会发布新功能或修复 Bug。GitHub 自带的 "Sync fork" 功能非常粗暴，**它可能会用原作者的文件覆盖掉你自己的个人数据（比如你辛辛苦苦配置的 `config.ini` 和累积的 `portfolio_details_history.csv`）**。
 
-| 文件 | 作用 |
-|------|------|
-| `index.html` | 仪表盘主页面结构 |
-| `style.css` | 页面样式与布局优化 |
-| `script.js` | 前端交互与 GitHub API 调用逻辑 |
+`sync.yml` 工作流就是为了解决这个问题而生的。
 
----
-
-### 🔐 安全提示
-
-- 建议使用 **Fine-grained Personal Access Token**；
-- 仅勾选所需权限（contents、workflows）；
-- 不要公开泄露 Token；
-- Token 仅保存在本地浏览器，不上传至仓库。
+- **工作原理**:
+    1.  **备份**: 在开始同步前，它会智能地将你的所有个人数据文件（`.ini`, `.csv`, `.png`, `.json`）备份到一个临时文件夹。
+    2.  **同步**: 然后，它会安全地从原作者仓库拉取最新的代码和功能。
+    3.  **恢复**: 最后，它会将备份的个人数据文件恢复到原位，覆盖掉从上游同步过来的同名文件。
+- **如何使用**:
+    1.  进入 `Actions` -> `sync.yml`。
+    2.  点击 `Run workflow` 即可一键安全更新。
 
 ---
 
-## 🧭 项目目标
+## 📄 文件结构说明
 
-该系统旨在实现一键化投资组合分析：
-- 自动抓取数据；
-- 自动计算指标；
-- 自动生成报告；
-- 自动可视化；
-- 自动上传展示。
+-   `.github/workflows/`: 存放所有 GitHub Actions 自动化工作流。
+-   `config.ini`: **你的核心配置文件**，用于定义持仓、现金和部分系统设置。
+-   `main.py`: 主分析脚本，负责获取价格、计算总值、生成图表和历史CSV。
+-   `calculate_return.py`: 收益率计算脚本，负责生成 `portfolio_return.json`。
+-   `index.html`, `style.css`, `script.js`: 构成前端仪表盘的所有文件。
+-   `portfolio_*.csv / .png / .json`: **所有由工作流自动生成的结果文件**，请勿手动修改。
 
 ---
 
-## 🪄 效果预览
+## 🔐 安全提示
 
-> 部署成功后访问 `https://<your-username>.github.io/<your-repo>/`
-
-你将看到一个带有三个标签页的仪表盘：
-
-- 💰 **资产概览**  
-  查看实时更新的总资产曲线和分布饼图。
-
-- 📈 **仓位更新**  
-  可视化编辑投资组合并保存。
-
-- ⚙️ **其他设置**  
-  管理系统参数或附加配置。
+-   你的 Personal Access Token (PAT) 是一个敏感凭证，请勿泄露。
+-   建议为这个项目创建一个专用的 PAT，并仅授予 `repo` 和 `workflow` 权限。
+-   前端页面会将 PAT 存储在浏览器的 `localStorage` 中，这意味着它仅保留在你的电脑上，是安全的。在不同设备上使用需要重新输入。
 
 ---
 
 ## 📄 许可证
 
-MIT License
+本项目采用 MIT 许可证。
