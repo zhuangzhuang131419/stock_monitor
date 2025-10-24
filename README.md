@@ -1,6 +1,7 @@
 # 投资组合自动化分析与仪表盘
 
 本项目是一个全自动的投资组合分析与可视化解决方案。它结合了强大的 Python 后端分析能力、GitHub Actions 的云端自动化，以及一个交互式的前端仪表盘，让你能够轻松追踪、管理和展示你的个人投资组合。
+<img width="735" height="461" alt="图片" src="https://github.com/user-attachments/assets/85de709c-99a4-4d59-aad7-a861a504ce44" />
 
 ---
 
