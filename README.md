@@ -115,8 +115,8 @@ python main.py
    - 选择 **Branch: main / (docs)**；
    - 保存后访问 `https://<你的用户名>.github.io/<仓库名>/`。
 
-3. 打开网页后：
-   - 首次访问时需输入你的 **Personal Access Token (PAT)**；
+3. 打开网页后可直接可视化收益率，历史图标和饼图：
+   - 如需经前端修改config.ini需输入你的 **Personal Access Token (PAT)**；
    - PAT 需具备：
      - `repo` 权限（读写 contents）
      - `workflow` 权限（运行 Actions）
