@@ -184,32 +184,54 @@ async function createPortfolioPieChart() {
                             title: function(context) {
                                 return context[0].label;
                             },
+                            // --- Tooltip 内容生成逻辑更新 ---
                             label: function(context) {
                                 const symbol = context.label;
                                 const value = context.parsed;
                                 const percentage = (value / totalValue) * 100;
                                 const assetData = assetsInfo[symbol];
 
+                                // 基础信息：价值和占比
                                 const lines = [
                                     `价值: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                                     `占比: ${percentage.toFixed(2)}%`
                                 ];
 
+                                // 检查是否为非现金资产且有收益率数据
                                 if (symbol !== 'CASH' && assetData && assetData.returns) {
-                                    const returns = assetData.returns;
-                                    lines.push('');
+                                    lines.push(''); // 添加一个空行作为分隔
                                     lines.push('涨跌幅:');
-                                    lines.push(`  1D: ${returns.previous_trading_day.toFixed(2)}%`);
-                                    lines.push(`  WTD: ${returns.week_to_date.toFixed(2)}%`);
-                                    lines.push(`  MTD: ${returns.month_to_date.toFixed(2)}%`);
-                                    lines.push(`  YTD: ${returns.year_to_date.toFixed(2)}%`);
-                                } else if (symbol === 'CASH') {
+
+                                    const returns = assetData.returns;
+
+                                    // 定义JSON key到中文标签的映射
+                                    const returnLabels = {
+                                        previous_trading_day: '上一个交易日',
+                                        week_to_date: '本周至今',
+                                        month_to_date: '本月至今',
+                                        year_to_date: '本年至今',
+                                        past_30_trading_days: '过去30个交易日',
+                                        past_250_trading_days: '过去250个交易日'
+                                    };
+
+                                    // 动态遍历并添加所有涨跌幅数据
+                                    for (const key in returnLabels) {
+                                        if (returns.hasOwnProperty(key)) {
+                                            const labelText = returnLabels[key];
+                                            const returnValue = returns[key];
+                                            lines.push(`  ${labelText}: ${returnValue.toFixed(2)}%`);
+                                        }
+                                    }
+                                }
+                                // 专门处理现金资产
+                                else if (symbol === 'CASH') {
                                     lines.push('');
-                                    lines.push('💰 现金资产');
+                                    lines.push('💰 现金资产 (无涨跌幅)');
                                 }
 
                                 return lines;
                             }
+                            // --- Tooltip 逻辑更新结束 ---
                         }
                     }
                 }
