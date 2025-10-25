@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (支持整个色块区域高亮 - 带插值)
+ * 创建交互式历史价值堆叠图 (支持整个色块区域高亮 - 带插值 + 超炫高亮效果)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -308,15 +308,26 @@ async function createPortfolioValueChart() {
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
 
+        // ========== 新增：生成超炫高亮渐变色 ==========
         const highlightedColorsRgba = originalColorsRgba.map(rgbaColor => {
             const parts = rgbaColor.match(/[\d.]+/g);
             if (!parts) return 'rgba(255,255,255,0.8)';
             let [r, g, b] = parts.map(Number);
-            const factor = 1.25;
+
+            // 提升亮度和饱和度
+            const factor = 1.5;
             r = Math.min(255, Math.floor(r * factor));
             g = Math.min(255, Math.floor(g * factor));
             b = Math.min(255, Math.floor(b * factor));
-            return `rgba(${r}, ${g}, ${b}, 1)`;
+
+            // 返回渐变字符串（从左上到右下的辉光效果）
+            const brightColor = `rgba(${r}, ${g}, ${b}, 1)`;
+            const glowColor = `rgba(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)}, 0.6)`;
+
+            return {
+                solid: brightColor,
+                gradient: `linear-gradient(135deg, ${brightColor} 0%, ${glowColor} 50%, ${brightColor} 100%)`
+            };
         });
 
         const datasets = assetColumns.map((asset, index) => ({
@@ -372,10 +383,12 @@ async function createPortfolioValueChart() {
         let lastHoveredIndex = null;
         let isHoveringLegend = false;
 
+        // ========== 高亮函数：支持渐变背景 ==========
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             const chartDatasets = portfolioValueChart.data.datasets;
 
+            // 恢复上一个高亮
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
@@ -383,21 +396,72 @@ async function createPortfolioValueChart() {
                 }
             }
 
+            // 应用新高亮（使用渐变）
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
+                    // 创建渐变对象
+                    const gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    const colorData = highlightedColorsRgba[targetIndex];
+
+                    // 解析渐变字符串
+                    const gradientMatch = colorData.gradient.match(/rgba\([^)]+\)/g);
+                    if (gradientMatch && gradientMatch.length >= 2) {
+                        gradient.addColorStop(0, gradientMatch[0]);
+                        gradient.addColorStop(0.5, gradientMatch[1]);
+                        gradient.addColorStop(1, gradientMatch[0]);
+                    }
+
+                    targetDataset.backgroundColor = gradient;
                 }
             }
 
             lastHoveredIndex = targetIndex;
             portfolioValueChart.update('none');
+
+            // ========== 高亮图例 ==========
+            highlightLegendItem(targetIndex);
         };
 
         const resetHighlight = () => {
             if (!isHoveringLegend) {
                 highlightDataset(-1);
             }
+        };
+
+        // ========== 新增：图例高亮函数 ==========
+        const highlightLegendItem = (targetIndex) => {
+            const legendItems = document.querySelectorAll('#portfolio-value-chart').parentElement.querySelectorAll('.chartjs-legend li');
+
+            legendItems.forEach((item, index) => {
+                const textSpan = item.querySelector('span');
+                const colorBox = item.querySelector('span[style*="background"]');
+
+                if (index === targetIndex) {
+                    // 高亮状态
+                    item.style.transform = 'scale(1.15)';
+                    item.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    if (textSpan) {
+                        textSpan.style.fontWeight = 'bold';
+                        textSpan.style.color = '#00f5d4';
+                    }
+                    if (colorBox) {
+                        colorBox.style.transform = 'scale(1.3)';
+                        colorBox.style.boxShadow = '0 0 15px rgba(0, 245, 212, 0.8)';
+                    }
+                } else {
+                    // 恢复状态
+                    item.style.transform = 'scale(1)';
+                    if (textSpan) {
+                        textSpan.style.fontWeight = '500';
+                        textSpan.style.color = '#e0e5f3';
+                    }
+                    if (colorBox) {
+                        colorBox.style.transform = 'scale(1)';
+                        colorBox.style.boxShadow = 'none';
+                    }
+                }
+            });
         };
 
         let timeUnit = 'day';
@@ -425,7 +489,24 @@ async function createPortfolioValueChart() {
                     title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
                     legend: {
                         display: true, position: 'bottom',
-                        labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: { family: 'Poppins', size: 11 },
+                            color: '#e0e5f3',
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            filter: (item) => item.text !== 'Total Value',
+                            // ========== 自定义图例渲染 ==========
+                            generateLabels: (chart) => {
+                                const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                return original.filter(item => item.text !== 'Total Value').map(item => {
+                                    item.fontColor = '#e0e5f3';
+                                    return item;
+                                });
+                            }
+                        },
                         onHover: (event, legendItem) => {
                             isHoveringLegend = true;
                             highlightDataset(legendItem.datasetIndex);
@@ -477,8 +558,6 @@ async function createPortfolioValueChart() {
 
         // ========== 带插值的区域检测逻辑 ==========
         const canvas = document.getElementById('portfolio-value-chart');
-
-        // 线性插值函数
         const lerp = (v0, v1, t) => v0 * (1 - t) + v1 * t;
 
         canvas.addEventListener('mousemove', (event) => {
@@ -501,7 +580,6 @@ async function createPortfolioValueChart() {
             const yScale = portfolioValueChart.scales.y;
             const dataLength = portfolioValueChart.data.labels.length;
 
-            // 找到鼠标左右两侧的数据点索引
             let leftIndex = 0;
             let rightIndex = 0;
             let interpolationFactor = 0;
@@ -518,13 +596,11 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 如果鼠标在最后一个点右侧，使用最后一个点的数据
             if (x > xScale.getPixelForValue(portfolioValueChart.data.labels[dataLength - 1])) {
                 leftIndex = rightIndex = dataLength - 1;
                 interpolationFactor = 0;
             }
 
-            // 计算插值后的堆叠高度
             let cumulativeValueBottom = 0;
             let hoveredDatasetIndex = -1;
 
@@ -532,19 +608,14 @@ async function createPortfolioValueChart() {
 
             for (let i = 0; i < stackedDatasets.length; i++) {
                 const dataset = stackedDatasets[i];
-
-                // 获取左右两个数据点的值
                 const valueLeft = dataset.data[leftIndex] || 0;
                 const valueRight = dataset.data[rightIndex] || 0;
-
-                // 插值计算当前位置的值
                 const interpolatedValue = lerp(valueLeft, valueRight, interpolationFactor);
 
                 const yBottom = yScale.getPixelForValue(cumulativeValueBottom);
                 cumulativeValueBottom += interpolatedValue;
                 const yTop = yScale.getPixelForValue(cumulativeValueBottom);
 
-                // 检查鼠标 Y 坐标是否在这个数据集的范围内
                 if (y >= yTop && y <= yBottom) {
                     hoveredDatasetIndex = portfolioValueChart.data.datasets.indexOf(dataset);
                     break;
@@ -566,7 +637,6 @@ async function createPortfolioValueChart() {
                 resetHighlight();
             }
         });
-        // ========== 区域检测逻辑完成 ==========
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
