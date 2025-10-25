@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (支持整个色块区域高亮 - 带插值)
+ * 创建交互式历史价值堆叠图 (超炫高亮效果 + 图例动画)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -308,15 +308,21 @@ async function createPortfolioValueChart() {
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
 
-        const highlightedColorsRgba = originalColorsRgba.map(rgbaColor => {
+        // ========== 生成高亮渐变色（更鲜艳） ==========
+        const highlightedColorsRgba = originalColorsRgba.map((rgbaColor, index) => {
+            const hex = themeColorsHex[index];
             const parts = rgbaColor.match(/[\d.]+/g);
-            if (!parts) return 'rgba(255,255,255,0.8)';
+            if (!parts) return rgbaColor;
+
             let [r, g, b] = parts.map(Number);
-            const factor = 1.25;
-            r = Math.min(255, Math.floor(r * factor));
-            g = Math.min(255, Math.floor(g * factor));
-            b = Math.min(255, Math.floor(b * factor));
-            return `rgba(${r}, ${g}, ${b}, 1)`;
+
+            // 提升饱和度和亮度
+            const hsl = rgbToHsl(r, g, b);
+            hsl.s = Math.min(100, hsl.s * 1.3); // 饱和度提升30%
+            hsl.l = Math.min(80, hsl.l * 1.2);  // 亮度提升20%
+
+            const rgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
         });
 
         const datasets = assetColumns.map((asset, index) => ({
@@ -371,11 +377,35 @@ async function createPortfolioValueChart() {
 
         let lastHoveredIndex = null;
         let isHoveringLegend = false;
+        let currentAnimation = null;
 
+        // ========== 创建 Canvas 叠加层用于特效 ==========
+        const canvas = document.getElementById('portfolio-value-chart');
+        const overlayCanvas = document.createElement('canvas');
+        overlayCanvas.style.position = 'absolute';
+        overlayCanvas.style.top = '0';
+        overlayCanvas.style.left = '0';
+        overlayCanvas.style.pointerEvents = 'none';
+        overlayCanvas.style.zIndex = '10';
+        canvas.parentElement.style.position = 'relative';
+        canvas.parentElement.appendChild(overlayCanvas);
+
+        const resizeOverlay = () => {
+            overlayCanvas.width = canvas.width;
+            overlayCanvas.height = canvas.height;
+            overlayCanvas.style.width = canvas.style.width;
+            overlayCanvas.style.height = canvas.style.height;
+        };
+        resizeOverlay();
+
+        const overlayCtx = overlayCanvas.getContext('2d');
+
+        // ========== 高亮函数：渐变 + 粒子效果 ==========
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             const chartDatasets = portfolioValueChart.data.datasets;
 
+            // 恢复上一个高亮
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
@@ -383,15 +413,163 @@ async function createPortfolioValueChart() {
                 }
             }
 
+            // 清除叠加层
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            // 应用新高亮
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
+                    // 创建动态渐变
+                    const gradient = ctx.createLinearGradient(
+                        0, 0,
+                        ctx.canvas.width, ctx.canvas.height
+                    );
+
+                    const baseColor = highlightedColorsRgba[targetIndex];
+                    const glowColor = baseColor.replace('1)', '0.6)');
+
+                    gradient.addColorStop(0, glowColor);
+                    gradient.addColorStop(0.5, baseColor);
+                    gradient.addColorStop(1, glowColor);
+
+                    targetDataset.backgroundColor = gradient;
+
+                    // ========== 添加粒子光效到叠加层 ==========
+                    drawParticleEffect(targetIndex);
                 }
             }
 
             lastHoveredIndex = targetIndex;
             portfolioValueChart.update('none');
+
+            // 高亮图例
+            highlightLegendItem(targetIndex);
+        };
+
+        // ========== 粒子光效函数 ==========
+        const drawParticleEffect = (datasetIndex) => {
+            if (!portfolioValueChart || !portfolioValueChart.chartArea) return;
+
+            const chartArea = portfolioValueChart.chartArea;
+            const color = themeColorsHex[datasetIndex];
+
+            // 创建闪烁光点
+            const particles = [];
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x: chartArea.left + Math.random() * (chartArea.right - chartArea.left),
+                    y: chartArea.top + Math.random() * (chartArea.bottom - chartArea.top),
+                    size: Math.random() * 3 + 1,
+                    opacity: Math.random() * 0.5 + 0.3,
+                    speedX: (Math.random() - 0.5) * 2,
+                    speedY: (Math.random() - 0.5) * 2
+                });
+            }
+
+            const animateParticles = () => {
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+                particles.forEach(p => {
+                    overlayCtx.beginPath();
+                    overlayCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    overlayCtx.fillStyle = `${color}${Math.floor(p.opacity * 255).toString(16).padStart(2, '0')}`;
+                    overlayCtx.shadowBlur = 10;
+                    overlayCtx.shadowColor = color;
+                    overlayCtx.fill();
+
+                    p.x += p.speedX;
+                    p.y += p.speedY;
+                    p.opacity -= 0.01;
+                });
+
+                if (particles.some(p => p.opacity > 0)) {
+                    requestAnimationFrame(animateParticles);
+                }
+            };
+
+            animateParticles();
+        };
+
+        // ========== 图例高亮函数（使用 anime.js） ==========
+        const highlightLegendItem = (targetIndex) => {
+            const legendContainer = portfolioValueChart.legend.legendItems;
+            if (!legendContainer) return;
+
+            // 停止之前的动画
+            if (currentAnimation) {
+                currentAnimation.pause();
+            }
+
+            legendContainer.forEach((item, index) => {
+                const legendElement = document.querySelector(`#portfolio-value-chart`).parentElement
+                    .querySelector(`.chartjs-legend li:nth-child(${index + 1})`);
+
+                if (!legendElement) return;
+
+                const textSpan = legendElement.querySelector('span:last-child');
+                const colorBox = legendElement.querySelector('span:first-child');
+
+                if (index === targetIndex) {
+                    // 高亮动画
+                    currentAnimation = anime({
+                        targets: legendElement,
+                        scale: [1, 1.2],
+                        duration: 400,
+                        easing: 'easeOutElastic(1, .6)'
+                    });
+
+                    if (textSpan) {
+                        anime({
+                            targets: textSpan,
+                            color: ['#e0e5f3', '#00f5d4'],
+                            fontWeight: [500, 700],
+                            duration: 300,
+                            easing: 'easeOutQuad'
+                        });
+                    }
+
+                    if (colorBox) {
+                        anime({
+                            targets: colorBox,
+                            scale: [1, 1.5],
+                            duration: 400,
+                            easing: 'easeOutElastic(1, .8)',
+                            begin: () => {
+                                colorBox.style.boxShadow = `0 0 20px ${themeColorsHex[targetIndex]}`;
+                            }
+                        });
+                    }
+                } else {
+                    // 恢复动画
+                    anime({
+                        targets: legendElement,
+                        scale: 1,
+                        duration: 300,
+                        easing: 'easeOutQuad'
+                    });
+
+                    if (textSpan) {
+                        anime({
+                            targets: textSpan,
+                            color: '#e0e5f3',
+                            fontWeight: 500,
+                            duration: 300
+                        });
+                    }
+
+                    if (colorBox) {
+                        anime({
+                            targets: colorBox,
+                            scale: 1,
+                            duration: 300,
+                            complete: () => {
+                                colorBox.style.boxShadow = 'none';
+                            }
+                        });
+                    }
+                }
+            });
         };
 
         const resetHighlight = () => {
@@ -425,7 +603,16 @@ async function createPortfolioValueChart() {
                     title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
                     legend: {
                         display: true, position: 'bottom',
-                        labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
+                        labels: {
+                            padding: 15,
+                            usePointStyle: true,
+                            pointStyle: 'circle',
+                            font: { family: 'Poppins', size: 11 },
+                            color: '#e0e5f3',
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            filter: (item) => item.text !== 'Total Value'
+                        },
                         onHover: (event, legendItem) => {
                             isHoveringLegend = true;
                             highlightDataset(legendItem.datasetIndex);
@@ -476,9 +663,6 @@ async function createPortfolioValueChart() {
         });
 
         // ========== 带插值的区域检测逻辑 ==========
-        const canvas = document.getElementById('portfolio-value-chart');
-
-        // 线性插值函数
         const lerp = (v0, v1, t) => v0 * (1 - t) + v1 * t;
 
         canvas.addEventListener('mousemove', (event) => {
@@ -501,7 +685,6 @@ async function createPortfolioValueChart() {
             const yScale = portfolioValueChart.scales.y;
             const dataLength = portfolioValueChart.data.labels.length;
 
-            // 找到鼠标左右两侧的数据点索引
             let leftIndex = 0;
             let rightIndex = 0;
             let interpolationFactor = 0;
@@ -518,13 +701,11 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 如果鼠标在最后一个点右侧，使用最后一个点的数据
             if (x > xScale.getPixelForValue(portfolioValueChart.data.labels[dataLength - 1])) {
                 leftIndex = rightIndex = dataLength - 1;
                 interpolationFactor = 0;
             }
 
-            // 计算插值后的堆叠高度
             let cumulativeValueBottom = 0;
             let hoveredDatasetIndex = -1;
 
@@ -532,19 +713,14 @@ async function createPortfolioValueChart() {
 
             for (let i = 0; i < stackedDatasets.length; i++) {
                 const dataset = stackedDatasets[i];
-
-                // 获取左右两个数据点的值
                 const valueLeft = dataset.data[leftIndex] || 0;
                 const valueRight = dataset.data[rightIndex] || 0;
-
-                // 插值计算当前位置的值
                 const interpolatedValue = lerp(valueLeft, valueRight, interpolationFactor);
 
                 const yBottom = yScale.getPixelForValue(cumulativeValueBottom);
                 cumulativeValueBottom += interpolatedValue;
                 const yTop = yScale.getPixelForValue(cumulativeValueBottom);
 
-                // 检查鼠标 Y 坐标是否在这个数据集的范围内
                 if (y >= yTop && y <= yBottom) {
                     hoveredDatasetIndex = portfolioValueChart.data.datasets.indexOf(dataset);
                     break;
@@ -566,7 +742,6 @@ async function createPortfolioValueChart() {
                 resetHighlight();
             }
         });
-        // ========== 区域检测逻辑完成 ==========
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
@@ -579,6 +754,51 @@ async function createPortfolioValueChart() {
             ctx.fillText('价值图加载失败，请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
         }
     }
+}
+
+// ========== 辅助函数：RGB 转 HSL ==========
+function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+
+    if (max === min) {
+        h = s = 0;
+    } else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+            case g: h = ((b - r) / d + 2) / 6; break;
+            case b: h = ((r - g) / d + 4) / 6; break;
+        }
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+}
+
+// ========== 辅助函数：HSL 转 RGB ==========
+function hslToRgb(h, s, l) {
+    h /= 360; s /= 100; l /= 100;
+    let r, g, b;
+
+    if (s === 0) {
+        r = g = b = l;
+    } else {
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 6 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+    }
+    return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
 }
 
 // ========== 页面加载与数据处理 ==========
