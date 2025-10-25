@@ -379,27 +379,14 @@ async function createPortfolioValueChart() {
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
-                    // 使用 GSAP 恢复上一个高亮数据集
-                    gsap.to(prevDataset, {
-                        backgroundColor: originalColorsRgba[lastHoveredIndex],
-                        duration: 0.3,
-                        overwrite: true,
-                    });
+                    prevDataset.backgroundColor = originalColorsRgba[lastHoveredIndex];
                 }
             }
 
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    const glowColor = highlightedColorsRgba[targetIndex];
-
-                    // 使用 GSAP 为当前数据集添加高亮效果
-                    gsap.to(targetDataset, {
-                        backgroundColor: glowColor,
-                        boxShadow: `0px 0px 20px ${glowColor}`,
-                        duration: 0.3,
-                        overwrite: true,
-                    });
+                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
                 }
             }
 
@@ -441,28 +428,10 @@ async function createPortfolioValueChart() {
                         labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
                         onHover: (event, legendItem) => {
                             isHoveringLegend = true;
-
-                            // 图例 ticker 和小色球放大
-                            const legendElement = event.native.target; // 获取当前悬浮的图例元素
-                            gsap.to(legendElement, {
-                                scale: 1.2, // 放大比例
-                                duration: 0.3, // 动画持续时间
-                                ease: 'power2.out', // 动画缓动效果
-                            });
-
                             highlightDataset(legendItem.datasetIndex);
                         },
-                        onLeave: (event, legendItem) => {
+                        onLeave: () => {
                             isHoveringLegend = false;
-
-                            // 恢复图例 ticker 和小色球的大小
-                            const legendElement = event.native.target; // 获取当前悬浮的图例元素
-                            gsap.to(legendElement, {
-                                scale: 1, // 恢复原始大小
-                                duration: 0.3,
-                                ease: 'power2.inOut',
-                            });
-
                             resetHighlight();
                         },
                     },
