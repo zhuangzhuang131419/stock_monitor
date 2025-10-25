@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v17 - 区域高亮最终版)
+ * 创建交互式历史价值堆叠图 (v18 - 图案高亮 & 悬停彻底修复版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -316,8 +316,8 @@ async function createPortfolioValueChart() {
             label: asset,
             data: [],
             backgroundColor: themeColorsRgba[index],
-            borderColor: themeColorsRgba[index], // 用于图例和提示框的颜色块
-            borderWidth: 0, // 区域本身不显示边框
+            borderColor: themeColorsRgba[index],
+            borderWidth: 0,
             fill: 'origin',
             stack: 'combined',
             pointRadius: 0,
@@ -359,32 +359,41 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        // --- 关键修正：全新的区域高亮逻辑 ---
+        // --- 关键修正1：实现全新的“图案叠加”高亮效果 ---
+
+        /**
+         * 创建一个用于高亮的半透明斜向条纹图案
+         * @returns {CanvasPattern}
+         */
+        const createHighlightPattern = () => {
+            const patternCanvas = document.createElement('canvas');
+            const patternCtx = patternCanvas.getContext('2d');
+            const size = 10;
+            patternCanvas.width = size;
+            patternCanvas.height = size;
+
+            // 在图案上先绘制一层半透明的基色，让原色能透出来
+            patternCtx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            patternCtx.fillRect(0, 0, size, size);
+
+            // 绘制更亮的斜线
+            patternCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            patternCtx.lineWidth = 1.5;
+            patternCtx.beginPath();
+            patternCtx.moveTo(-1, 1);
+            patternCtx.lineTo(2, -2);
+            patternCtx.moveTo(size - 1, size + 1);
+            patternCtx.lineTo(size + 1, size - 1);
+            patternCtx.stroke();
+
+            return patternCtx.createPattern(patternCanvas, 'repeat');
+        };
+
+        const highlightPattern = createHighlightPattern();
         let lastHoveredIndex = null;
 
         /**
-         * 根据输入的RGBA颜色，生成一个更亮的高亮颜色
-         * @param {string} rgbaColor - "rgba(r, g, b, a)" 格式的颜色
-         * @returns {string} - 一个更亮的 RGBA 颜色
-         */
-        const getHighlightColor = (rgbaColor) => {
-            const parts = rgbaColor.match(/[\d.]+/g);
-            if (!parts || parts.length < 3) return 'rgba(255, 255, 255, 0.5)'; // 备用颜色
-
-            let [r, g, b, a] = parts.map(Number);
-            a = (a === undefined) ? 1 : a;
-
-            // 通过给RGB三通道增加一个固定值来提亮颜色
-            const amount = 40;
-            r = Math.min(255, r + amount);
-            g = Math.min(255, g + amount);
-            b = Math.min(255, b + amount);
-
-            return `rgba(${r}, ${g}, ${b}, ${a})`;
-        };
-
-        /**
-         * 通过改变区域背景色来高亮指定索引的数据集
+         * 通过应用图案来高亮指定的数据集
          * @param {number} targetIndex - 要高亮的数据集索引
          */
         const highlightDataset = (targetIndex) => {
@@ -400,16 +409,22 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 步骤2: 高亮新的目标区域，将其颜色变得更亮
+            // 步骤2: 为新的目标区域应用高亮图案
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    targetDataset.backgroundColor = getHighlightColor(themeColorsRgba[targetIndex]);
+                    // 我们将原始颜色和高亮图案混合
+                    // 先设置原始颜色为底色
+                    targetDataset.backgroundColor = themeColorsRgba[targetIndex];
+                    // 然后让Chart.js在其上绘制图案
+                    // 为此，我们需要一个插件或更复杂的设置。
+                    // 一个更简单的技巧是直接将图案作为背景
+                    targetDataset.backgroundColor = highlightPattern;
                 }
             }
 
             lastHoveredIndex = targetIndex;
-            portfolioValueChart.update('none'); // 无动画更新，避免闪烁
+            portfolioValueChart.update('none');
         };
 
         const resetHighlight = () => highlightDataset(-1);
@@ -443,7 +458,6 @@ async function createPortfolioValueChart() {
                              label: function(context) {
                                  let label = context.dataset.label || '';
                                  if (label) label += ': ';
-                                 // 在堆叠图中，context.parsed.y 是累加值，要获取单个资产的值，需要用 raw
                                  const singleValue = context.raw;
                                  label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(singleValue);
                                  return label;
@@ -458,10 +472,12 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // --- 悬停检测逻辑 (与 V16 相同，因为它是正确的) ---
+        // --- 关键修正2：彻底修复并简化悬停检测逻辑 ---
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const chart = portfolioValueChart;
+            // 忽略图例区域的悬停
             if (e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
+                resetHighlight(); // 当鼠标移到图例上时，由图例的 onHover 事件处理
                 return;
             }
 
@@ -477,26 +493,15 @@ async function createPortfolioValueChart() {
             }
 
             let foundIndex = -1;
+            // 从最顶部的区域开始向下查找
             for (let i = stackedPoints.length - 1; i >= 0; i--) {
-                const point = stackedPoints[i];
-                const chartArea = chart.chartArea;
+                const currentPoint = stackedPoints[i];
 
-                // 获取当前区域的底部边界 Y 坐标
-                // 如果是第一个区域(i=0)，其底部是图表底部；否则，其底部是它下面那个区域的顶部
-                const bottomPointY = (i > 0) ? stackedPoints[i - 1].y : chartArea.bottom;
-
-                // 判断鼠标的Y坐标是否落在当前区域的顶部(point.y)和底部(bottomPointY)之间
-                if (e.offsetY >= point.y && e.offsetY < bottomPointY) {
-                    foundIndex = point.datasetIndex;
+                // 检查鼠标的Y坐标是否大于当前区域的顶部边界
+                // 因为我们是从上往下检查，第一个满足这个条件的区域就是我们想要的
+                if (e.offsetY >= currentPoint.y) {
+                    foundIndex = currentPoint.datasetIndex;
                     break;
-                }
-            }
-
-            // 如果循环后仍未找到（通常意味着鼠标在最底部的区域），直接指定最底部的区域
-            if (foundIndex === -1 && stackedPoints.length > 0) {
-                const bottomMostPoint = stackedPoints[0];
-                if (e.offsetY >= bottomMostPoint.y) {
-                    foundIndex = bottomMostPoint.datasetIndex;
                 }
             }
 
