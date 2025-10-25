@@ -78,7 +78,7 @@ function setupEventListeners() {
 
 /**
  * 创建高级交互式饼图
- * 修复数据处理问题并优化样式
+ * 修复数据处理问题并优化样式，特别处理CASH资产
  */
 async function createPortfolioPieChart() {
     const assetsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_assets_returns.json`;
@@ -162,7 +162,7 @@ async function createPortfolioPieChart() {
                             boxHeight: 12
                         }
                     },
-                    // 自定义工具提示
+                    // 自定义工具提示 - 特别处理CASH
                     tooltip: {
                         enabled: true,
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -186,7 +186,7 @@ async function createPortfolioPieChart() {
                             title: function(context) {
                                 return context[0].label;
                             },
-                            // 修复数据处理：不再重复乘以100
+                            // 🔥 修复：特别处理CASH资产
                             label: function(context) {
                                 const symbol = context.label;
                                 const value = context.parsed;
@@ -198,8 +198,8 @@ async function createPortfolioPieChart() {
                                     `占比: ${percentage}%`
                                 ];
 
-                                // 如果不是现金，显示涨跌幅数据（修复：不再乘以100）
-                                if (symbol !== 'CASH' && assetData.returns) {
+                                // 🔥 关键修复：CASH资产不显示涨跌幅，其他资产才显示
+                                if (symbol !== 'CASH' && assetData && assetData.returns) {
                                     const returns = assetData.returns;
                                     lines.push(''); // 空行分隔
                                     lines.push('涨跌幅:');
@@ -209,6 +209,10 @@ async function createPortfolioPieChart() {
                                     lines.push(`本年至今: ${(returns.year_to_date * 100).toFixed(2)}%`);
                                     lines.push(`过去30个交易日: ${(returns.past_30_trading_days * 100).toFixed(2)}%`);
                                     lines.push(`过去250个交易日: ${(returns.past_250_trading_days * 100).toFixed(2)}%`);
+                                } else if (symbol === 'CASH') {
+                                    // CASH资产可以添加一些说明文字（可选）
+                                    lines.push('');
+                                    lines.push('💰 现金资产');
                                 }
 
                                 return lines;
