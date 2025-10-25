@@ -67,7 +67,11 @@ jobs:
           # 运行主程序
           python main.py
           
-          # <<< 新增：运行收益率计算脚本 >>>
+          echo "=== Running get_asset_performance.py for detailed returns ==="
+          # 运行新脚本，生成个股的表现 asset_performance.json
+          python get_asset_performance.py
+          
+          # <<< 新增：运行总仓位收益率计算脚本 >>>
           echo "=== Running calculate_return.py ==="
           python calculate_return.py
 
@@ -77,7 +81,7 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           # <<< 修改：在 git add 命令中加入 portfolio_return.json >>>
-          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json
+          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json portfolio_assets_returns.json
           # 检查是否有文件被修改，如果有，才执行提交和推送
           git diff --staged --quiet || git commit -m "📊 Automated data, charts, and returns update"
           git push
