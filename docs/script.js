@@ -195,7 +195,7 @@ async function createPortfolioPieChart() {
 
                                 const lines = [
                                     `价值: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                                    `占比: ${percentage}%`
+                                    `占比: ${percentage * 100}%`
                                 ];
 
                                 // 🔥 关键修复：CASH资产不显示涨跌幅，其他资产才显示
