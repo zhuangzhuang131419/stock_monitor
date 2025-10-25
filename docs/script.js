@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (V19 - 最终稳定版 - “聚焦”高亮 & 悬停修复)
+ * 创建交互式历史价值堆叠图 (V20 - 高亮悬停终极修正版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -310,29 +310,27 @@ async function createPortfolioValueChart() {
         const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
 
         const themeColorsHex = generateThemeColors(assetColumns.length);
-        const themeColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
+        const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
 
-        // --- 关键修正1：全新的“聚焦”高亮方案 ---
-        // 预先计算好每个资产颜色变暗后的效果
-        const dimmedColorsRgba = themeColorsRgba.map(rgbaColor => {
+        // --- 关键修正1：恢复为“高亮”效果 ---
+        // 预先计算好每个颜色的“高亮”版本
+        const highlightedColorsRgba = originalColorsRgba.map(rgbaColor => {
             const parts = rgbaColor.match(/[\d.]+/g);
-            if (!parts) return 'rgba(0,0,0,0.5)';
+            if (!parts) return 'rgba(255,255,255,0.8)';
             let [r, g, b] = parts.map(Number);
-
-            // 通过与深色背景混合来实现“变暗”，效果比单纯降低亮度更好
-            // 假设图表背景色为深蓝灰色 #161a25 (rgb(22, 26, 37))
-            const mixFactor = 0.6; // 60%的背景色 + 40%的资产原色
-            r = Math.floor(r * (1 - mixFactor) + 22 * mixFactor);
-            g = Math.floor(g * (1 - mixFactor) + 26 * mixFactor);
-            b = Math.floor(b * (1 - mixFactor) + 37 * mixFactor);
+            // 通过增加亮度和饱和度来实现高亮
+            const factor = 1.25;
+            r = Math.min(255, Math.floor(r * factor));
+            g = Math.min(255, Math.floor(g * factor));
+            b = Math.min(255, Math.floor(b * factor));
             return `rgba(${r}, ${g}, ${b}, 1)`;
         });
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: [],
-            backgroundColor: themeColorsRgba[index],
-            borderColor: themeColorsRgba[index],
+            backgroundColor: originalColorsRgba[index],
+            borderColor: originalColorsRgba[index],
             borderWidth: 0,
             fill: 'origin',
             stack: 'combined',
@@ -378,7 +376,7 @@ async function createPortfolioValueChart() {
         let lastHoveredIndex = null;
 
         /**
-         * “聚焦”高亮：保持目标区域原色，调暗其他所有区域
+         * 通过应用高亮色来突出显示目标区域
          * @param {number} targetIndex - 要高亮的数据集索引。传入-1则全部恢复。
          */
         const highlightDataset = (targetIndex) => {
@@ -386,22 +384,24 @@ async function createPortfolioValueChart() {
 
             const chartDatasets = portfolioValueChart.data.datasets;
 
-            chartDatasets.forEach((dataset, index) => {
-                if (dataset.stack !== 'combined') return;
-
-                if (targetIndex === -1) { // 重置状态，所有区域都恢复原色
-                    dataset.backgroundColor = themeColorsRgba[index];
-                } else { // 激活高亮状态
-                    if (index === targetIndex) {
-                        dataset.backgroundColor = themeColorsRgba[index]; // 被选中的区域使用原色
-                    } else {
-                        dataset.backgroundColor = dimmedColorsRgba[index]; // 其他区域使用“变暗”的颜色
-                    }
+            // 恢复上一个高亮的区域
+            if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
+                const prevDataset = chartDatasets[lastHoveredIndex];
+                if (prevDataset && prevDataset.stack === 'combined') {
+                    prevDataset.backgroundColor = originalColorsRgba[lastHoveredIndex];
                 }
-            });
+            }
+
+            // 高亮当前选中的区域
+            if (targetIndex !== null && targetIndex > -1) {
+                const targetDataset = chartDatasets[targetIndex];
+                if (targetDataset && targetDataset.stack === 'combined') {
+                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
+                }
+            }
 
             lastHoveredIndex = targetIndex;
-            portfolioValueChart.update('none'); // 无动画更新，响应迅速
+            portfolioValueChart.update('none');
         };
 
         const resetHighlight = () => highlightDataset(-1);
@@ -449,16 +449,13 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // --- 关键修正2：彻底修复的、稳定可靠的悬停检测逻辑 ---
+        // --- 关键修正2：终极修复版悬停检测逻辑 ---
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const chart = portfolioValueChart;
-
-            // 修复1：当鼠标在图例区域时，完全交由图例的 onHover/onLeave 事件处理，避免冲突
             if (chart.legend && e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
-                return;
+                return; // 鼠标在图例上，交由图例事件处理
             }
 
-            // 修复2：使用正确且稳定的算法来检测鼠标所在的图表区域
             const points = chart.getElementsAtEventForMode(e, 'index', { intersect: false });
             const stackedPoints = points
                 .filter(p => chart.data.datasets[p.datasetIndex].stack === 'combined')
@@ -470,26 +467,31 @@ async function createPortfolioValueChart() {
             }
 
             let foundIndex = -1;
-            // 从最顶部的资产区域开始向下遍历
+            // 从最顶层的资产区域开始向下遍历 (datasetIndex 越大，在图上越靠上)
             for (let i = stackedPoints.length - 1; i >= 0; i--) {
                 const currentPoint = stackedPoints[i];
 
-                // 一个区域的顶部是它自己的Y坐标
-                const topY = currentPoint.y;
-                // 一个区域的底部是它下面那个区域的Y坐标 (对于最底部的区域，其底部是图表底部)
-                const bottomY = (i > 0) ? stackedPoints[i - 1].y : chart.chartArea.bottom;
+                // 一个区域的“视觉顶部”是它自身的Y坐标
+                const visualTopY = currentPoint.y;
 
-                // 判断鼠标是否落在这个垂直区间内
-                if (e.offsetY >= topY && e.offsetY < bottomY) {
+                // 一个区域的“视觉底部”是它底下那个区域的Y坐标。
+                // 对于最底部的区域(i=0)，它的视觉底部是图表的底部边缘。
+                const visualBottomY = (i > 0)
+                    ? stackedPoints[i - 1].y
+                    : chart.chartArea.bottom;
+
+                // 这个是核心修正：我们必须处理当一个区域高度为0的情况 (visualTopY === visualBottomY)。
+                // 只有当鼠标的Y坐标严格位于区域的上下边界之间时，才算命中。
+                // 如果区域高度为0，这个条件自然不成立，就会继续检查下一个区域。
+                if (e.offsetY >= visualTopY && e.offsetY < visualBottomY) {
                     foundIndex = currentPoint.datasetIndex;
                     break;
                 }
             }
 
-            highlightDataset(foundIndex); // 传入找到的索引，如果没找到则传入-1自动重置
+            highlightDataset(foundIndex);
         });
 
-        // 当鼠标完全离开图表画布时，重置所有高亮
         portfolioValueChart.canvas.addEventListener('mouseleave', resetHighlight);
 
     } catch (error) {
