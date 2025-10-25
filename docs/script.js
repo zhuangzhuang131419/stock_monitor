@@ -271,7 +271,28 @@ function generateThemeColors(count) {
 
 // ========== 新增：历史价值堆叠图 ==========
 /**
- * 创建交互式历史价值堆叠图 (v2 - 修正联动高亮逻辑)
+ * 新增：将任何有效的CSS颜色字符串转换为带透明度的RGBA格式
+ * @param {string} color 任何颜色字符串 (e.g., '#00f5d4', 'hsl(175, 100%, 48%)')
+ * @param {number} alpha 透明度 (0 到 1)
+ * @returns {string} 返回 'rgba(r, g, b, alpha)' 格式的字符串
+ */
+function toRgba(color, alpha) {
+    // 这是一个利用浏览器自身渲染引擎来解析颜色的技巧
+    const elem = document.createElement('div');
+    elem.style.color = color;
+    document.body.appendChild(elem); // 必须添加到DOM中才能计算样式
+
+    // 获取浏览器计算后的颜色，它总是 "rgb(r, g, b)" 格式
+    const rgbColor = window.getComputedStyle(elem).color;
+
+    document.body.removeChild(elem); // 清理临时元素
+
+    // 将 "rgb(r, g, b)" 替换为 "rgba(r, g, b, alpha)"
+    return rgbColor.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+}
+
+/**
+ * 创建交互式历史价值堆叠图 (v3 - 最终修正版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -321,8 +342,9 @@ async function createPortfolioValueChart() {
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            backgroundColor: themeColors[index] + '80', // 保持您原始的半透明背景色逻辑
-            borderColor: themeColors[index], // 边框颜色是纯色
+            // --- 修改点 1：使用 toRgba 函数正确生成带透明度的背景色 ---
+            backgroundColor: toRgba(themeColors[index], 0.5), // 0.5 代表 50% 透明度
+            borderColor: themeColors[index],
             fill: 'origin',
             stack: 'combined',
             pointRadius: 0,
@@ -380,33 +402,29 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // --- 核心修正：更新 onHover 和 onLeave 的逻辑 ---
                         onHover: (event, legendItem, legend) => {
                             const chart = legend.chart;
                             const hoveredDatasetIndex = legendItem.datasetIndex;
-                            const dimmedColor = 'rgba(100, 116, 139, 0.2)'; // 暗淡颜色
+                            const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
                             chart.data.datasets.forEach((dataset, index) => {
-                                // 忽略 "Total Value" 线条和图例中没有的项目
                                 if (dataset.label === 'Total Value' || dataset.hidden) return;
 
-                                // 如果当前数据集不是被悬停的那个，就让它变暗
                                 if (index !== hoveredDatasetIndex) {
                                     dataset.backgroundColor = dimmedColor;
                                 } else {
-                                    // 否则，根据边框颜色重新生成半透明背景色
-                                    dataset.backgroundColor = dataset.borderColor + '80';
+                                    // --- 修改点 2：使用 toRgba 恢复高亮颜色 ---
+                                    dataset.backgroundColor = toRgba(dataset.borderColor, 0.5);
                                 }
                             });
                             chart.update();
                         },
                         onLeave: (event, legendItem, legend) => {
                             const chart = legend.chart;
-                            // 鼠标离开图例区域，恢复所有区域的原始颜色
                             chart.data.datasets.forEach((dataset, index) => {
                                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    // 根据每个数据集自己的边框颜色恢复背景色
-                                    dataset.backgroundColor = dataset.borderColor + '80';
+                                    // --- 修改点 3：使用 toRgba 恢复所有原始颜色 ---
+                                    dataset.backgroundColor = toRgba(dataset.borderColor, 0.5);
                                 }
                             });
                             chart.update();
