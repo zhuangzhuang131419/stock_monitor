@@ -287,7 +287,7 @@ function toRgba(hex, alpha = 1) {
 
 /**
  * 创建交互式历史价值堆叠图
- * [优化] 1. 高亮效果升级为动态“光泽扫过”动画，确保在任何底色上都清晰可见。
+ * [优化] 1. 高亮效果升级为动态"光泽扫过"动画，确保在任何底色上都清晰可见。
  * [优化] 2. 保留并优化图例高亮交互（文字变大、色球出现边框）。
  */
 async function createPortfolioValueChart() {
@@ -296,7 +296,7 @@ async function createPortfolioValueChart() {
 
     // --- 动画状态变量 ---
     let shimmerAnimationId = null;
-    let shimmerPosition = 0; // 光泽效果的位置 (0 to 1.5, >1 a pause)
+    let shimmerPosition = 0; // 光泽效果的位置
 
     try {
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
@@ -395,9 +395,13 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        // --- 动画循环 ---
+        // --- 动画循环（修改部分） ---
         const shimmerLoop = () => {
-            shimmerPosition = (shimmerPosition + 0.01) % 1.5; // 1.5 để có khoảng dừng
+            shimmerPosition += 0.01;
+            // 修改：当光泽完全离开右边界后，重置到左边界之前
+            if (shimmerPosition > 1.15) {
+                shimmerPosition = -0.15;
+            }
             if (portfolioValueChart) {
                 portfolioValueChart.update('none'); // 只更新，不触发动画
             }
@@ -417,7 +421,7 @@ async function createPortfolioValueChart() {
 
             // 如果有高亮项，则启动动画
             if (targetIndex !== null) {
-                shimmerPosition = 0;
+                shimmerPosition = -0.15; // 修改：从左边界之前开始
                 shimmerLoop();
             } else {
                 // 如果没有高亮项，立即重绘一次以恢复正常状态
