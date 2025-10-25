@@ -1,5 +1,5 @@
 {
-  "analysis_date": "2025-10-25T11:54:24.615009",
+  "analysis_date": "2025-10-25T12:06:57.924220",
   "portfolio_returns": {
     "ADBE": {
       "current_price": 353.52,
@@ -7,8 +7,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": -0.17,
-        "week_to_date": 2.95,
-        "month_to_date": 2.85,
+        "week_to_date": 6.08,
+        "month_to_date": 0.22,
         "year_to_date": -20.5,
         "past_30_trading_days": -0.15,
         "past_250_trading_days": -26.79
@@ -20,8 +20,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": -0.32,
-        "week_to_date": -0.87,
-        "month_to_date": 2.97,
+        "week_to_date": 0.37,
+        "month_to_date": 6.72,
         "year_to_date": 50.22,
         "past_30_trading_days": 28.31,
         "past_250_trading_days": 46.81
@@ -33,8 +33,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": 0.4,
-        "week_to_date": -0.4,
-        "month_to_date": -1.22,
+        "week_to_date": -0.06,
+        "month_to_date": -2.12,
         "year_to_date": 8.56,
         "past_30_trading_days": -0.13,
         "past_250_trading_days": 7.5
@@ -46,8 +46,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": 2.7,
-        "week_to_date": 1.31,
-        "month_to_date": 6.13,
+        "week_to_date": 2.61,
+        "month_to_date": 6.92,
         "year_to_date": 37.75,
         "past_30_trading_days": 8.47,
         "past_250_trading_days": 60.44
@@ -59,24 +59,11 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": -0.38,
-        "week_to_date": -0.64,
-        "month_to_date": 1.75,
+        "week_to_date": -0.75,
+        "month_to_date": 0.63,
         "year_to_date": 7.3,
         "past_30_trading_days": -2.15,
         "past_250_trading_days": 3.76
-      }
-    },
-    "NVDA_2026-01-16_130_PUT": {
-      "current_price": 1.18,
-      "total_value": 590.0,
-      "asset_type": "option",
-      "returns": {
-        "previous_trading_day": -11.94,
-        "week_to_date": -23.87,
-        "month_to_date": -23.87,
-        "year_to_date": -94.37,
-        "past_30_trading_days": -52.23,
-        "past_250_trading_days": -94.72
       }
     },
     "V": {
@@ -85,8 +72,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": 0.41,
-        "week_to_date": 0.86,
-        "month_to_date": -0.13,
+        "week_to_date": 1.61,
+        "month_to_date": 1.76,
         "year_to_date": 10.48,
         "past_30_trading_days": 0.99,
         "past_250_trading_days": 23.52
@@ -98,8 +85,8 @@
       "asset_type": "stock",
       "returns": {
         "previous_trading_day": 0.83,
-        "week_to_date": 0.87,
-        "month_to_date": 1.3,
+        "week_to_date": 1.93,
+        "month_to_date": 1.66,
         "year_to_date": 16.63,
         "past_30_trading_days": 4.41,
         "past_250_trading_days": 18.4

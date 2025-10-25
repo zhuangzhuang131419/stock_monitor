@@ -102,6 +102,70 @@ class PortfolioAnalyzer:
             print(f"    -> 查找交易日时出错: {e}，使用原始日期")
             return target_date
 
+    def find_last_trading_day_of_previous_period(self, reference_date, period_type):
+        """
+        查找上一个周期的最后一个交易日
+        period_type: 'week'、'month' 或 'year'
+        """
+        reference_symbol = "SPY"
+
+        try:
+            ticker = yf.Ticker(reference_symbol)
+
+            if period_type == 'week':
+                # 查找上周五（上一个交易周的最后一天）
+                days_since_monday = reference_date.weekday()
+                if days_since_monday == 0:  # 如果今天是周一
+                    # 上周五
+                    target_date = reference_date - timedelta(days=3)
+                else:
+                    # 本周一的前一天（上周日），然后找上周五
+                    monday_this_week = reference_date - timedelta(days=days_since_monday)
+                    target_date = monday_this_week - timedelta(days=3)  # 上周五
+
+            elif period_type == 'month':
+                # 查找上个月的最后一个交易日
+                # 先找到本月第一天，然后减一天得到上个月最后一天
+                first_day_this_month = reference_date.replace(day=1)
+                target_date = first_day_this_month - timedelta(days=1)
+
+            elif period_type == 'year':
+                # 查找去年的最后一个交易日
+                # 先找到今年第一天，然后减一天得到去年最后一天
+                first_day_this_year = reference_date.replace(month=1, day=1)
+                target_date = first_day_this_year - timedelta(days=1)
+
+            else:
+                return reference_date
+
+            # 获取历史数据来找到最近的交易日
+            start_search = target_date - timedelta(days=10)
+            end_search = target_date + timedelta(days=3)
+
+            hist = ticker.history(start=start_search, end=end_search)
+
+            if hist.empty:
+                print(f"    -> 警告: 无法获取{period_type}交易日历")
+                return target_date
+
+            # 将索引转换为无时区的datetime
+            hist.index = hist.index.tz_localize(None)
+
+            # 查找小于等于目标日期的最近交易日
+            available_dates = hist.index[hist.index <= target_date]
+
+            if len(available_dates) > 0:
+                last_trading_day = available_dates[-1]
+                print(f"    -> {period_type}起始点: {target_date.date()} -> {last_trading_day.date()}")
+                return last_trading_day
+            else:
+                print(f"    -> 警告: 无法找到{period_type}的合适交易日")
+                return target_date
+
+        except Exception as e:
+            print(f"    -> 查找{period_type}交易日时出错: {e}")
+            return target_date
+
     def is_option_symbol(self, symbol):
         """
         判断是否为期权代码
@@ -289,6 +353,7 @@ class PortfolioAnalyzer:
     def get_trading_dates(self, reference_date):
         """
         计算各个时间段的起始日期，返回datetime对象以匹配yfinance时区
+        修正WTD、MTD和YTD的计算逻辑
         """
         # 转换为datetime对象以避免时区比较错误
         if isinstance(reference_date, datetime):
@@ -299,15 +364,14 @@ class PortfolioAnalyzer:
         # 上一交易日
         prev_trading_day = ref_dt - timedelta(days=1)
 
-        # 本周至今（周一开始）
-        days_since_monday = ref_dt.weekday()
-        week_start = ref_dt - timedelta(days=days_since_monday)
+        # 本周至今（WTD）- 从上周五收盘开始计算
+        week_start = self.find_last_trading_day_of_previous_period(ref_dt, 'week')
 
-        # 本月至今
-        month_start = ref_dt.replace(day=1)
+        # 本月至今（MTD）- 从上个月最后一个交易日收盘开始计算
+        month_start = self.find_last_trading_day_of_previous_period(ref_dt, 'month')
 
-        # 本年至今
-        year_start = ref_dt.replace(month=1, day=1)
+        # 本年至今（YTD）- 从去年最后一个交易日收盘开始计算
+        year_start = self.find_last_trading_day_of_previous_period(ref_dt, 'year')
 
         # 过去30个交易日（约6周）
         past_30_days = ref_dt - timedelta(days=45)
@@ -354,8 +418,12 @@ class PortfolioAnalyzer:
             # 计算各时间段的收益率
             for period, start_datetime in dates.items():
                 try:
-                    # 对于股票，也使用交易日查找功能
-                    trading_date = self.find_nearest_trading_day(start_datetime, fixed_symbol)
+                    # 对于WTD、MTD和YTD，start_datetime已经是正确的交易日
+                    # 对于其他时间段，使用交易日查找功能
+                    if period in ['week_to_date', 'month_to_date', 'year_to_date']:
+                        trading_date = start_datetime
+                    else:
+                        trading_date = self.find_nearest_trading_day(start_datetime, fixed_symbol)
 
                     # 找到最接近起始日期的价格
                     available_dates = hist.index[hist.index >= trading_date]
