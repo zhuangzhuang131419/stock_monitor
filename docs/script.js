@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (修复双向高亮功能)
+ * 创建交互式历史价值堆叠图 (支持整个色块区域高亮 - 带插值)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -370,13 +370,12 @@ async function createPortfolioValueChart() {
         if (portfolioValueChart) portfolioValueChart.destroy();
 
         let lastHoveredIndex = null;
-        let isHoveringLegend = false; // 新增：标记是否在图例上
+        let isHoveringLegend = false;
 
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             const chartDatasets = portfolioValueChart.data.datasets;
 
-            // 重置上一个高亮
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
@@ -384,7 +383,6 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 设置新的高亮
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
@@ -397,7 +395,7 @@ async function createPortfolioValueChart() {
         };
 
         const resetHighlight = () => {
-            if (!isHoveringLegend) { // 只有不在图例上时才重置
+            if (!isHoveringLegend) {
                 highlightDataset(-1);
             }
         };
@@ -429,11 +427,11 @@ async function createPortfolioValueChart() {
                         display: true, position: 'bottom',
                         labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
                         onHover: (event, legendItem) => {
-                            isHoveringLegend = true; // 标记正在图例上
+                            isHoveringLegend = true;
                             highlightDataset(legendItem.datasetIndex);
                         },
                         onLeave: () => {
-                            isHoveringLegend = false; // 离开图例
+                            isHoveringLegend = false;
                             resetHighlight();
                         },
                     },
@@ -477,42 +475,98 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // ========== 修复后的 Canvas 鼠标事件监听 ==========
+        // ========== 带插值的区域检测逻辑 ==========
         const canvas = document.getElementById('portfolio-value-chart');
 
+        // 线性插值函数
+        const lerp = (v0, v1, t) => v0 * (1 - t) + v1 * t;
+
         canvas.addEventListener('mousemove', (event) => {
-            if (!portfolioValueChart || isHoveringLegend) return; // 如果在图例上，跳过
+            if (!portfolioValueChart || isHoveringLegend) return;
 
-            const elements = portfolioValueChart.getElementsAtEventForMode(
-                event,
-                'point', // 改为 'point' 模式，更容易检测到堆叠区域
-                { intersect: false }, // 改为 false，放宽检测范围
-                false
-            );
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
 
-            if (elements.length > 0) {
-                const element = elements[0];
-                const datasetIndex = element.datasetIndex;
-                const dataset = portfolioValueChart.data.datasets[datasetIndex];
+            const chartArea = portfolioValueChart.chartArea;
+            if (!chartArea) return;
 
-                if (dataset && dataset.stack === 'combined') {
-                    highlightDataset(datasetIndex);
-                    canvas.style.cursor = 'pointer';
-                    return;
+            if (x < chartArea.left || x > chartArea.right || y < chartArea.top || y > chartArea.bottom) {
+                canvas.style.cursor = 'default';
+                resetHighlight();
+                return;
+            }
+
+            const xScale = portfolioValueChart.scales.x;
+            const yScale = portfolioValueChart.scales.y;
+            const dataLength = portfolioValueChart.data.labels.length;
+
+            // 找到鼠标左右两侧的数据点索引
+            let leftIndex = 0;
+            let rightIndex = 0;
+            let interpolationFactor = 0;
+
+            for (let i = 0; i < dataLength - 1; i++) {
+                const xLeft = xScale.getPixelForValue(portfolioValueChart.data.labels[i]);
+                const xRight = xScale.getPixelForValue(portfolioValueChart.data.labels[i + 1]);
+
+                if (x >= xLeft && x <= xRight) {
+                    leftIndex = i;
+                    rightIndex = i + 1;
+                    interpolationFactor = (x - xLeft) / (xRight - xLeft);
+                    break;
                 }
             }
 
-            canvas.style.cursor = 'default';
-            resetHighlight();
-        });
+            // 如果鼠标在最后一个点右侧，使用最后一个点的数据
+            if (x > xScale.getPixelForValue(portfolioValueChart.data.labels[dataLength - 1])) {
+                leftIndex = rightIndex = dataLength - 1;
+                interpolationFactor = 0;
+            }
 
-        canvas.addEventListener('mouseleave', () => {
-            if (!isHoveringLegend) { // 只有不在图例上时才重置
+            // 计算插值后的堆叠高度
+            let cumulativeValueBottom = 0;
+            let hoveredDatasetIndex = -1;
+
+            const stackedDatasets = portfolioValueChart.data.datasets.filter(ds => ds.stack === 'combined');
+
+            for (let i = 0; i < stackedDatasets.length; i++) {
+                const dataset = stackedDatasets[i];
+
+                // 获取左右两个数据点的值
+                const valueLeft = dataset.data[leftIndex] || 0;
+                const valueRight = dataset.data[rightIndex] || 0;
+
+                // 插值计算当前位置的值
+                const interpolatedValue = lerp(valueLeft, valueRight, interpolationFactor);
+
+                const yBottom = yScale.getPixelForValue(cumulativeValueBottom);
+                cumulativeValueBottom += interpolatedValue;
+                const yTop = yScale.getPixelForValue(cumulativeValueBottom);
+
+                // 检查鼠标 Y 坐标是否在这个数据集的范围内
+                if (y >= yTop && y <= yBottom) {
+                    hoveredDatasetIndex = portfolioValueChart.data.datasets.indexOf(dataset);
+                    break;
+                }
+            }
+
+            if (hoveredDatasetIndex > -1) {
+                highlightDataset(hoveredDatasetIndex);
+                canvas.style.cursor = 'pointer';
+            } else {
                 canvas.style.cursor = 'default';
                 resetHighlight();
             }
         });
-        // ========== 双向高亮功能修复完成 ==========
+
+        canvas.addEventListener('mouseleave', () => {
+            if (!isHoveringLegend) {
+                canvas.style.cursor = 'default';
+                resetHighlight();
+            }
+        });
+        // ========== 区域检测逻辑完成 ==========
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
@@ -522,7 +576,7 @@ async function createPortfolioValueChart() {
             ctx.fillStyle = '#ff4757';
             ctx.font = '16px Poppins';
             ctx.textAlign = 'center';
-            ctx.fillText('价值图加载失败,请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('价值图加载失败，请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
         }
     }
 }
