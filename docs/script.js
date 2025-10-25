@@ -960,7 +960,7 @@ function getRepoInfoFromURL() {
     if (hostname.includes('github.io') && pathParts.length > 0) {
         return { owner: hostname.split('.')[0], repo: pathParts[0] };
     }
-    return { owner: 'YOUR_USERNAME', repo: 'YOUR_REPONAME' };
+    return { owner: 'cli117', repo: 'stock_monitor' };
 }
 
 async function loadReturnsData() {
