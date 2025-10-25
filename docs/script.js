@@ -292,7 +292,7 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v6 - 最终事件修复版)
+ * 创建交互式历史价值堆叠图 (v7 - 最终防崩溃修复版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -402,7 +402,6 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // --- 核心修正 1：移除无效的 onHover 和 onLeave 事件 ---
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -435,34 +434,40 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // --- 核心修正 2：添加全新的、可靠的外部事件监听器 ---
         let lastHoveredLegendIndex = null;
         const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
-        // 恢复所有图例颜色的函数
         const restoreLegendColors = () => {
             portfolioValueChart.data.datasets.forEach((dataset, index) => {
                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                    dataset.backgroundColor = backgroundColorsRgba[index];
+                    // 确保 backgroundColorsRgba[index] 存在
+                    if(backgroundColorsRgba[index]) {
+                       dataset.backgroundColor = backgroundColorsRgba[index];
+                    }
                 }
             });
-            portfolioValueChart.update('none'); // 使用 'none' 动画模式以提高性能
+            portfolioValueChart.update('none');
         };
 
-        // 监听鼠标在图表画布上的移动
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const legend = portfolioValueChart.legend;
-            // getHitBoxes() 是一个内部方法，但在这里非常有效
+
+            // --- 核心修复：在这里添加安全检查 ---
+            // 必须先确认 legend 和 legend.hitboxes 都已准备就绪，否则直接退出
+            if (!legend || !legend.hitboxes || legend.hitboxes.length === 0) {
+                return;
+            }
+
             const legendItems = legend.legendItems;
             let hoveredIndex = -1;
 
-            // 遍历所有图例项，检查鼠标是否在它们的“命中框”内
+            // 现在可以安全地遍历 hitboxes
             for (let i = 0; i < legend.hitboxes.length; i++) {
                 const hitbox = legend.hitboxes[i];
-                if (e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
+                // 额外检查 hitbox 是否有效
+                if (hitbox && e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
                     e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height)
                 {
-                    // 确保我们找到的图例项是有效的
                     if(legendItems[i] && legendItems[i].text !== 'Total Value') {
                         hoveredIndex = legendItems[i].datasetIndex;
                         break;
@@ -470,7 +475,6 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 如果悬停状态没有改变，则不执行任何操作以优化性能
             if (hoveredIndex === lastHoveredLegendIndex) {
                 return;
             }
@@ -478,24 +482,24 @@ async function createPortfolioValueChart() {
             lastHoveredLegendIndex = hoveredIndex;
 
             if (hoveredIndex !== -1) {
-                // 如果悬停在某个图例上，则调暗其他图例
                 portfolioValueChart.data.datasets.forEach((dataset, index) => {
                     if (dataset.label === 'Total Value' || dataset.hidden) return;
 
                     if (index !== hoveredIndex) {
                         dataset.backgroundColor = dimmedColor;
                     } else {
-                        dataset.backgroundColor = backgroundColorsRgba[index];
+                        // 确保 backgroundColorsRgba[index] 存在
+                        if(backgroundColorsRgba[index]) {
+                            dataset.backgroundColor = backgroundColorsRgba[index];
+                        }
                     }
                 });
                 portfolioValueChart.update('none');
             } else {
-                // 如果没有悬停在任何图例上，则恢复所有颜色
                 restoreLegendColors();
             }
         });
 
-        // 当鼠标完全离开图表时，也恢复所有颜色
         portfolioValueChart.canvas.addEventListener('mouseout', () => {
              if (lastHoveredLegendIndex !== null) {
                 lastHoveredLegendIndex = null;
@@ -503,15 +507,16 @@ async function createPortfolioValueChart() {
              }
         });
 
-
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
         const canvas = document.getElementById('portfolio-value-chart');
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ff4757';
-        ctx.font = '16px Poppins';
-        ctx.textAlign = 'center';
-        ctx.fillText('价值图加载失败', canvas.width / 2, canvas.height / 2);
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ff4757';
+            ctx.font = '16px Poppins';
+            ctx.textAlign = 'center';
+            ctx.fillText('价值图加载失败', canvas.width / 2, canvas.height / 2);
+        }
     }
 }
 
