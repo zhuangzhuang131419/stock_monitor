@@ -96,7 +96,7 @@ async function createPortfolioPieChart() {
         const totalValue = Object.values(portfolioReturns).reduce((sum, asset) => sum + asset.total_value, 0);
 
         const filteredAssets = Object.entries(portfolioReturns).filter(([symbol, data]) => {
-            const percentage = (data.total_value / totalValue) * 100;
+            const percentage = (data.total_value / totalValue);
             return percentage >= 0.1; // 过滤掉小于0.1%的资产
         });
 
@@ -190,7 +190,7 @@ async function createPortfolioPieChart() {
                             label: function(context) {
                                 const symbol = context.label;
                                 const value = context.parsed;
-                                const percentage = ((value / totalValue) * 100).toFixed(2);
+                                const percentage = (value / totalValue).toFixed(2);
                                 const assetData = assetsInfo[symbol];
 
                                 const lines = [
@@ -203,12 +203,12 @@ async function createPortfolioPieChart() {
                                     const returns = assetData.returns;
                                     lines.push(''); // 空行分隔
                                     lines.push('涨跌幅:');
-                                    lines.push(`上一交易日: ${(returns.previous_trading_day * 100).toFixed(2)}%`);
-                                    lines.push(`本周至今: ${(returns.week_to_date * 100).toFixed(2)}%`);
-                                    lines.push(`本月至今: ${(returns.month_to_date * 100).toFixed(2)}%`);
-                                    lines.push(`本年至今: ${(returns.year_to_date * 100).toFixed(2)}%`);
-                                    lines.push(`过去30个交易日: ${(returns.past_30_trading_days * 100).toFixed(2)}%`);
-                                    lines.push(`过去250个交易日: ${(returns.past_250_trading_days * 100).toFixed(2)}%`);
+                                    lines.push(`上一交易日: ${(returns.previous_trading_day).toFixed(2)}%`);
+                                    lines.push(`本周至今: ${(returns.week_to_date).toFixed(2)}%`);
+                                    lines.push(`本月至今: ${(returns.month_to_date).toFixed(2)}%`);
+                                    lines.push(`本年至今: ${(returns.year_to_date).toFixed(2)}%`);
+                                    lines.push(`过去30个交易日: ${(returns.past_30_trading_days).toFixed(2)}%`);
+                                    lines.push(`过去250个交易日: ${(returns.past_250_trading_days).toFixed(2)}%`);
                                 } else if (symbol === 'CASH') {
                                     // CASH资产可以添加一些说明文字（可选）
                                     lines.push('');
