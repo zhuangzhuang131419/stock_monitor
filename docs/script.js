@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v18 - 图案高亮 & 悬停彻底修复版)
+ * 创建交互式历史价值堆叠图 (V19 - 最终稳定版 - “聚焦”高亮 & 悬停修复)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -311,6 +311,22 @@ async function createPortfolioValueChart() {
 
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const themeColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
+
+        // --- 关键修正1：全新的“聚焦”高亮方案 ---
+        // 预先计算好每个资产颜色变暗后的效果
+        const dimmedColorsRgba = themeColorsRgba.map(rgbaColor => {
+            const parts = rgbaColor.match(/[\d.]+/g);
+            if (!parts) return 'rgba(0,0,0,0.5)';
+            let [r, g, b] = parts.map(Number);
+
+            // 通过与深色背景混合来实现“变暗”，效果比单纯降低亮度更好
+            // 假设图表背景色为深蓝灰色 #161a25 (rgb(22, 26, 37))
+            const mixFactor = 0.6; // 60%的背景色 + 40%的资产原色
+            r = Math.floor(r * (1 - mixFactor) + 22 * mixFactor);
+            g = Math.floor(g * (1 - mixFactor) + 26 * mixFactor);
+            b = Math.floor(b * (1 - mixFactor) + 37 * mixFactor);
+            return `rgba(${r}, ${g}, ${b}, 1)`;
+        });
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
@@ -359,72 +375,33 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        // --- 关键修正1：实现全新的“图案叠加”高亮效果 ---
-
-        /**
-         * 创建一个用于高亮的半透明斜向条纹图案
-         * @returns {CanvasPattern}
-         */
-        const createHighlightPattern = () => {
-            const patternCanvas = document.createElement('canvas');
-            const patternCtx = patternCanvas.getContext('2d');
-            const size = 10;
-            patternCanvas.width = size;
-            patternCanvas.height = size;
-
-            // 在图案上先绘制一层半透明的基色，让原色能透出来
-            patternCtx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            patternCtx.fillRect(0, 0, size, size);
-
-            // 绘制更亮的斜线
-            patternCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            patternCtx.lineWidth = 1.5;
-            patternCtx.beginPath();
-            patternCtx.moveTo(-1, 1);
-            patternCtx.lineTo(2, -2);
-            patternCtx.moveTo(size - 1, size + 1);
-            patternCtx.lineTo(size + 1, size - 1);
-            patternCtx.stroke();
-
-            return patternCtx.createPattern(patternCanvas, 'repeat');
-        };
-
-        const highlightPattern = createHighlightPattern();
         let lastHoveredIndex = null;
 
         /**
-         * 通过应用图案来高亮指定的数据集
-         * @param {number} targetIndex - 要高亮的数据集索引
+         * “聚焦”高亮：保持目标区域原色，调暗其他所有区域
+         * @param {number} targetIndex - 要高亮的数据集索引。传入-1则全部恢复。
          */
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
 
             const chartDatasets = portfolioValueChart.data.datasets;
 
-            // 步骤1: 恢复之前高亮的区域为其原始颜色
-            if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
-                const prevDataset = chartDatasets[lastHoveredIndex];
-                if (prevDataset && prevDataset.stack === 'combined') {
-                    prevDataset.backgroundColor = themeColorsRgba[lastHoveredIndex];
-                }
-            }
+            chartDatasets.forEach((dataset, index) => {
+                if (dataset.stack !== 'combined') return;
 
-            // 步骤2: 为新的目标区域应用高亮图案
-            if (targetIndex !== null && targetIndex > -1) {
-                const targetDataset = chartDatasets[targetIndex];
-                if (targetDataset && targetDataset.stack === 'combined') {
-                    // 我们将原始颜色和高亮图案混合
-                    // 先设置原始颜色为底色
-                    targetDataset.backgroundColor = themeColorsRgba[targetIndex];
-                    // 然后让Chart.js在其上绘制图案
-                    // 为此，我们需要一个插件或更复杂的设置。
-                    // 一个更简单的技巧是直接将图案作为背景
-                    targetDataset.backgroundColor = highlightPattern;
+                if (targetIndex === -1) { // 重置状态，所有区域都恢复原色
+                    dataset.backgroundColor = themeColorsRgba[index];
+                } else { // 激活高亮状态
+                    if (index === targetIndex) {
+                        dataset.backgroundColor = themeColorsRgba[index]; // 被选中的区域使用原色
+                    } else {
+                        dataset.backgroundColor = dimmedColorsRgba[index]; // 其他区域使用“变暗”的颜色
+                    }
                 }
-            }
+            });
 
             lastHoveredIndex = targetIndex;
-            portfolioValueChart.update('none');
+            portfolioValueChart.update('none'); // 无动画更新，响应迅速
         };
 
         const resetHighlight = () => highlightDataset(-1);
@@ -472,17 +449,17 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // --- 关键修正2：彻底修复并简化悬停检测逻辑 ---
+        // --- 关键修正2：彻底修复的、稳定可靠的悬停检测逻辑 ---
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const chart = portfolioValueChart;
-            // 忽略图例区域的悬停
-            if (e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
-                resetHighlight(); // 当鼠标移到图例上时，由图例的 onHover 事件处理
+
+            // 修复1：当鼠标在图例区域时，完全交由图例的 onHover/onLeave 事件处理，避免冲突
+            if (chart.legend && e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
                 return;
             }
 
+            // 修复2：使用正确且稳定的算法来检测鼠标所在的图表区域
             const points = chart.getElementsAtEventForMode(e, 'index', { intersect: false });
-
             const stackedPoints = points
                 .filter(p => chart.data.datasets[p.datasetIndex].stack === 'combined')
                 .sort((a, b) => a.datasetIndex - b.datasetIndex);
@@ -493,21 +470,26 @@ async function createPortfolioValueChart() {
             }
 
             let foundIndex = -1;
-            // 从最顶部的区域开始向下查找
+            // 从最顶部的资产区域开始向下遍历
             for (let i = stackedPoints.length - 1; i >= 0; i--) {
                 const currentPoint = stackedPoints[i];
 
-                // 检查鼠标的Y坐标是否大于当前区域的顶部边界
-                // 因为我们是从上往下检查，第一个满足这个条件的区域就是我们想要的
-                if (e.offsetY >= currentPoint.y) {
+                // 一个区域的顶部是它自己的Y坐标
+                const topY = currentPoint.y;
+                // 一个区域的底部是它下面那个区域的Y坐标 (对于最底部的区域，其底部是图表底部)
+                const bottomY = (i > 0) ? stackedPoints[i - 1].y : chart.chartArea.bottom;
+
+                // 判断鼠标是否落在这个垂直区间内
+                if (e.offsetY >= topY && e.offsetY < bottomY) {
                     foundIndex = currentPoint.datasetIndex;
                     break;
                 }
             }
 
-            highlightDataset(foundIndex);
+            highlightDataset(foundIndex); // 传入找到的索引，如果没找到则传入-1自动重置
         });
 
+        // 当鼠标完全离开图表画布时，重置所有高亮
         portfolioValueChart.canvas.addEventListener('mouseleave', resetHighlight);
 
     } catch (error) {
