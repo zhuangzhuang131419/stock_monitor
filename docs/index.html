@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- 新增：引入 Font Awesome 图标库 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,7 +38,10 @@
 
                     <div class="charts-container">
                         <img id="value-chart-img" alt="资产价值变化图 (加载中...)">
-                        <img id="pie-chart-img" alt="资产分布饼图 (加载中...)">
+                        <!-- 替换静态饼图为Canvas -->
+                        <div class="pie-chart-container">
+                            <canvas id="portfolio-pie-chart"></canvas>
+                        </div>
                     </div>
                 </div>
                 <div class="summary-footer">

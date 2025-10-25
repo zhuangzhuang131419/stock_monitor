@@ -6,6 +6,7 @@ let fileSha = null;
 let token = '';
 let originalIniLines = [];
 let pendingTabSwitch = null;
+let portfolioPieChart = null; // 新增：饼图实例
 
 // --- DOM 元素获取 ---
 const tabButtons = {
@@ -42,7 +43,7 @@ const historyModal = {
     content: document.getElementById('history-table-content')
 };
 const totalValueDisplay = document.getElementById('total-value-display');
-const returnsDisplayContainer = document.getElementById('returns-display'); // <-- 新增
+const returnsDisplayContainer = document.getElementById('returns-display');
 
 // --- 初始化与事件监听 ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -73,6 +74,177 @@ function setupEventListeners() {
     historyModal.backdrop.addEventListener('click', hideHistoryTable);
 }
 
+// ========== 新增：饼图相关函数 ==========
+
+/**
+ * 创建高级交互式饼图
+ * 基于Chart.js官方文档的饼图配置 [[3]](#__3)
+ */
+async function createPortfolioPieChart() {
+    const assetsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_assets_returns.json`;
+    const timestamp = new Date().getTime();
+
+    try {
+        const response = await fetch(`${assetsUrl}?t=${timestamp}`);
+        if (!response.ok) {
+            throw new Error(`无法加载资产数据文件 (状态: ${response.status})`);
+        }
+        const assetsData = await response.json();
+
+        // 处理数据，过滤掉占比小于0.1%的资产
+        const portfolioReturns = assetsData.portfolio_returns;
+        const totalValue = Object.values(portfolioReturns).reduce((sum, asset) => sum + asset.total_value, 0);
+
+        const filteredAssets = Object.entries(portfolioReturns).filter(([symbol, data]) => {
+            const percentage = (data.total_value / totalValue) * 100;
+            return percentage >= 0.1; // 过滤掉小于0.1%的资产
+        });
+
+        // 准备图表数据
+        const labels = filteredAssets.map(([symbol]) => symbol);
+        const values = filteredAssets.map(([, data]) => data.total_value);
+        const assetsInfo = Object.fromEntries(filteredAssets);
+
+        // 生成渐变色彩
+        const colors = generateGradientColors(labels.length);
+
+        const ctx = document.getElementById('portfolio-pie-chart').getContext('2d');
+
+        // 销毁现有图表实例
+        if (portfolioPieChart) {
+            portfolioPieChart.destroy();
+        }
+
+        // 创建新的饼图实例，使用Chart.js的动画配置 [[2]](#__2)
+        portfolioPieChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    hoverOffset: 15, // 悬停时的偏移效果
+                    hoverBorderWidth: 3,
+                    hoverBorderColor: '#00f5d4'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                // 动画配置，基于Chart.js动画文档 [[2]](#__2)
+                animation: {
+                    animateRotate: true,
+                    animateScale: true,
+                    duration: 1500,
+                    easing: 'easeOutQuart'
+                },
+                // 交互配置，基于Chart.js交互文档 [[4]](#__4)
+                interaction: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: {
+                                family: 'Poppins',
+                                size: 12
+                            },
+                            color: '#2c3e50'
+                        }
+                    },
+                    // 自定义工具提示，基于Chart.js工具提示文档 [[0]](#__0)
+                    tooltip: {
+                        enabled: true,
+                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        displayColors: true,
+                        titleFont: {
+                            family: 'Poppins',
+                            size: 14,
+                            weight: 'bold'
+                        },
+                        bodyFont: {
+                            family: 'Poppins',
+                            size: 12
+                        },
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            },
+                            // 自定义工具提示内容 [[0]](#__0)
+                            label: function(context) {
+                                const symbol = context.label;
+                                const value = context.parsed;
+                                const percentage = ((value / totalValue) * 100).toFixed(2);
+                                const assetData = assetsInfo[symbol];
+
+                                const lines = [
+                                    `价值: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                                    `占比: ${percentage}%`
+                                ];
+
+                                // 如果不是现金，显示涨跌幅数据
+                                if (symbol !== 'CASH' && assetData.returns) {
+                                    const returns = assetData.returns;
+                                    lines.push(''); // 空行分隔
+                                    lines.push('涨跌幅:');
+                                    lines.push(`上一交易日: ${(returns.previous_trading_day * 100).toFixed(2)}%`);
+                                    lines.push(`本周至今: ${(returns.week_to_date * 100).toFixed(2)}%`);
+                                    lines.push(`本月至今: ${(returns.month_to_date * 100).toFixed(2)}%`);
+                                    lines.push(`本年至今: ${(returns.year_to_date * 100).toFixed(2)}%`);
+                                    lines.push(`过去30个交易日: ${(returns.past_30_trading_days * 100).toFixed(2)}%`);
+                                    lines.push(`过去250个交易日: ${(returns.past_250_trading_days * 100).toFixed(2)}%`);
+                                }
+
+                                return lines;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('创建饼图失败:', error);
+        const canvas = document.getElementById('portfolio-pie-chart');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#d73a49';
+        ctx.font = '16px Poppins';
+        ctx.textAlign = 'center';
+        ctx.fillText('饼图加载失败', canvas.width / 2, canvas.height / 2);
+    }
+}
+
+/**
+ * 生成渐变色彩数组
+ */
+function generateGradientColors(count) {
+    const colors = [
+        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+        '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2'
+    ];
+
+    // 如果需要更多颜色，生成额外的颜色
+    while (colors.length < count) {
+        const hue = (colors.length * 137.508) % 360; // 黄金角度分布
+        colors.push(`hsl(${hue}, 70%, 65%)`);
+    }
+
+    return colors.slice(0, count);
+}
+
+// ========== 原有函数保持不变，但需要在loadInitialSummary中调用饼图创建 ==========
 
 async function showHistoryTable() {
     document.body.classList.add('modal-open');
@@ -262,7 +434,6 @@ async function loadDataWithToken(tokenToValidate, isAutoAuth = false) {
     }
 }
 
-
 async function savePortfolio() {
     if (!token || !fileSha) {
         alert('错误: 授权信息丢失，请刷新页面重试。');
@@ -422,8 +593,6 @@ function getRepoInfoFromURL() {
     return { owner: 'YOUR_USERNAME', repo: 'YOUR_REPONAME' };
 }
 
-// ========== 主要修改: 拆分出加载收益率的函数 ==========
-
 /**
  * 异步获取并展示投资回报率、盈利和增值数据
  */
@@ -516,27 +685,25 @@ async function loadReturnsData() {
     }
 }
 
-
+// ========== 修改loadInitialSummary函数，添加饼图创建 ==========
 async function loadInitialSummary() {
     const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const valueChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_value_chart.png`;
-    const pieChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_pie_chart.png`;
 
     const valueChartImg = document.getElementById('value-chart-img');
-    const pieChartImg = document.getElementById('pie-chart-img');
     const lastUpdatedTime = document.getElementById('last-updated-time');
 
     valueChartImg.style.display = 'none';
-    pieChartImg.style.display = 'none';
     valueChartImg.onload = () => { valueChartImg.style.display = 'block'; };
-    pieChartImg.onload = () => { pieChartImg.style.display = 'block'; };
 
     const timestamp = new Date().getTime();
     valueChartImg.src = `${valueChartUrl}?t=${timestamp}`;
-    pieChartImg.src = `${pieChartUrl}?t=${timestamp}`;
 
-    // 同时加载收益率数据
+    // 加载收益率数据
     loadReturnsData();
+
+    // 创建交互式饼图
+    createPortfolioPieChart();
 
     try {
         const response = await fetch(`${csvUrl}?t=${timestamp}`);
@@ -567,8 +734,6 @@ async function loadInitialSummary() {
         totalValueDisplay.style.color = 'red';
     }
 }
-// ========================================================
-
 
 function createOptionRowUI(ticker = '', date = '', strike = '', type = 'CALL', quantity = '') {
     const itemDiv = document.createElement('div');

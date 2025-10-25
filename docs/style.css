@@ -224,8 +224,22 @@ body.modal-open {
     box-shadow: 0 8px 20px rgba(0,0,0,0.2);
     background-color: #fff; /* 让图表背景为白色，与暗色主题形成对比 */
 }
-.charts-container img:last-child {
-    margin-bottom: 0;
+
+/* 新增：饼图容器样式 */
+.pie-chart-container {
+    max-width: 90%;
+    margin: 0 auto;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid var(--container-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+}
+
+#portfolio-pie-chart {
+    max-height: 400px;
+    width: 100% !important;
+    height: auto !important;
 }
 
 .summary-footer {
@@ -330,6 +344,7 @@ input.invalid { border-color: var(--negative-color) !important; background-color
     .main-container { border-radius: 0; max-width: 100%; border: none; }
     .content-area { padding: 20px; }
     .charts-container img { max-width: 100%; }
+    .pie-chart-container { max-width: 100%; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
     .returns-container { flex-wrap: wrap; gap: 15px; }
     .return-item { flex: 1 1 130px; }
