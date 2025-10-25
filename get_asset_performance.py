@@ -55,6 +55,12 @@ class PortfolioAnalyzer:
             print(f"数据加载失败: {e}")
             return False
 
+    def is_cash_symbol(self, symbol):
+        """
+        判断是否为现金类资产
+        """
+        return symbol.upper() in ['CASH', 'USD', 'MONEY', 'CASH_USD']
+
     def find_nearest_trading_day(self, target_date, symbol=None, max_days_back=10):
         """
         查找最近的交易日
@@ -347,6 +353,10 @@ class PortfolioAnalyzer:
         if self.is_option_symbol(symbol):
             return None
 
+        # 如果是现金，返回None，使用专门的现金处理逻辑
+        if self.is_cash_symbol(symbol):
+            return None
+
         # 修复Berkshire Hathaway代码格式
         return symbol.replace('.', '-')
 
@@ -387,6 +397,20 @@ class PortfolioAnalyzer:
             'past_30_days': past_30_days,
             'past_250_days': past_250_days
         }
+
+    def calculate_cash_returns(self, symbol, current_price, dates):
+        """
+        计算现金类资产的收益率（通常为0%）
+        """
+        print(f"  处理现金类资产: {symbol}")
+
+        # 现金类资产的收益率通常为0%
+        returns = {}
+        for period in dates.keys():
+            returns[period] = 0.0
+
+        print(f"  现金类资产收益率均为 0.00%")
+        return returns
 
     def calculate_stock_returns(self, symbol, current_price, dates):
         """
@@ -490,7 +514,9 @@ class PortfolioAnalyzer:
         计算指定标的的各时间段收益率
         根据标的类型选择不同的处理方法
         """
-        if self.is_option_symbol(symbol):
+        if self.is_cash_symbol(symbol):
+            return self.calculate_cash_returns(symbol, current_price, dates)
+        elif self.is_option_symbol(symbol):
             return self.calculate_option_returns(symbol, current_price, dates)
         else:
             return self.calculate_stock_returns(symbol, current_price, dates)
@@ -515,14 +541,20 @@ class PortfolioAnalyzer:
 
             current_price = holding_info['price']
 
-            # 如果是期权，尝试获取更详细的当前信息
-            if self.is_option_symbol(symbol):
+            # 根据资产类型进行不同处理
+            if self.is_cash_symbol(symbol):
+                print(f"  检测到现金类资产: {symbol}")
+                asset_type = 'cash'
+            elif self.is_option_symbol(symbol):
                 print(f"  检测到期权标的: {symbol}")
+                asset_type = 'option'
                 option_current = self.get_option_current_price(symbol)
                 if option_current and option_current['success']:
                     # 使用更新的期权价格（如果可用）
                     current_price = option_current['price']
                     print(f"  使用更新的期权价格: ${current_price:.2f}")
+            else:
+                asset_type = 'stock'
 
             returns = self.calculate_returns(symbol, current_price, dates)
 
@@ -530,7 +562,7 @@ class PortfolioAnalyzer:
                 'current_price': current_price,
                 'total_value': holding_info['total_value'],
                 'returns': returns,
-                'asset_type': 'option' if self.is_option_symbol(symbol) else 'stock'
+                'asset_type': asset_type
             }
 
         return True
@@ -578,42 +610,54 @@ class PortfolioAnalyzer:
         # 分类统计
         stocks = {k: v for k, v in self.results.items() if v['asset_type'] == 'stock'}
         options = {k: v for k, v in self.results.items() if v['asset_type'] == 'option'}
+        cash = {k: v for k, v in self.results.items() if v['asset_type'] == 'cash'}
 
         print(f"\n持仓概览:")
         print(f"  股票: {len(stocks)} 个")
         print(f"  期权: {len(options)} 个")
+        print(f"  现金: {len(cash)} 个")
 
         for symbol, data in self.results.items():
-            asset_type_label = "【期权】" if data['asset_type'] == 'option' else "【股票】"
+            if data['asset_type'] == 'cash':
+                asset_type_label = "【现金】"
+            elif data['asset_type'] == 'option':
+                asset_type_label = "【期权】"
+            else:
+                asset_type_label = "【股票】"
+
             print(f"\n{asset_type_label} {symbol}:")
             print(f"  当前价格: ${data['current_price']:.2f}")
             print(f"  持仓价值: ${data['total_value']:,.2f}")
-            print("  收益率:")
 
-            returns = data['returns']
-            periods = [
-                ('上一交易日', 'prev_day'),
-                ('本周至今', 'week_to_date'),
-                ('本月至今', 'month_to_date'),
-                ('本年至今', 'year_to_date'),
-                ('过去30个交易日', 'past_30_days'),
-                ('过去250个交易日', 'past_250_days')
-            ]
+            # 现金类资产不显示收益率详情
+            if data['asset_type'] == 'cash':
+                print("  现金类资产，收益率均为 0.00%")
+            else:
+                print("  收益率:")
+                returns = data['returns']
+                periods = [
+                    ('上一交易日', 'prev_day'),
+                    ('本周至今', 'week_to_date'),
+                    ('本月至今', 'month_to_date'),
+                    ('本年至今', 'year_to_date'),
+                    ('过去30个交易日', 'past_30_days'),
+                    ('过去250个交易日', 'past_250_days')
+                ]
 
-            for period_name, period_key in periods:
-                value = returns[period_key]
-                if value is not None:
-                    color = "+" if value >= 0 else ""
-                    print(f"    {period_name}: {color}{value:.2f}%")
-                else:
-                    print(f"    {period_name}: 无数据")
+                for period_name, period_key in periods:
+                    value = returns[period_key]
+                    if value is not None:
+                        color = "+" if value >= 0 else ""
+                        print(f"    {period_name}: {color}{value:.2f}%")
+                    else:
+                        print(f"    {period_name}: 无数据")
 
 
 def main():
     """
     主函数
     """
-    print("投资组合收益率历史获取工具 (支持股票和期权)")
+    print("投资组合收益率历史获取工具 (支持股票、期权和现金)")
 
     # 初始化分析器
     analyzer = PortfolioAnalyzer('portfolio_details_history.csv')
