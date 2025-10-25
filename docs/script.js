@@ -78,7 +78,7 @@ function setupEventListeners() {
 
 /**
  * 创建高级交互式饼图
- * 基于Chart.js官方文档的饼图配置 [[3]](#__3)
+ * 修复数据处理问题并优化样式
  */
 async function createPortfolioPieChart() {
     const assetsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_assets_returns.json`;
@@ -105,8 +105,8 @@ async function createPortfolioPieChart() {
         const values = filteredAssets.map(([, data]) => data.total_value);
         const assetsInfo = Object.fromEntries(filteredAssets);
 
-        // 生成渐变色彩
-        const colors = generateGradientColors(labels.length);
+        // 生成与主题匹配的色彩
+        const colors = generateThemeColors(labels.length);
 
         const ctx = document.getElementById('portfolio-pie-chart').getContext('2d');
 
@@ -115,7 +115,7 @@ async function createPortfolioPieChart() {
             portfolioPieChart.destroy();
         }
 
-        // 创建新的饼图实例，使用Chart.js的动画配置 [[2]](#__2)
+        // 创建新的饼图实例
         portfolioPieChart = new Chart(ctx, {
             type: 'pie',
             data: {
@@ -123,9 +123,9 @@ async function createPortfolioPieChart() {
                 datasets: [{
                     data: values,
                     backgroundColor: colors,
-                    borderColor: '#ffffff',
+                    borderColor: 'rgba(224, 229, 243, 0.8)',
                     borderWidth: 2,
-                    hoverOffset: 15, // 悬停时的偏移效果
+                    hoverOffset: 12,
                     hoverBorderWidth: 3,
                     hoverBorderColor: '#00f5d4'
                 }]
@@ -133,14 +133,14 @@ async function createPortfolioPieChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                // 动画配置，基于Chart.js动画文档 [[2]](#__2)
+                // 动画配置
                 animation: {
                     animateRotate: true,
                     animateScale: true,
-                    duration: 1500,
+                    duration: 1800,
                     easing: 'easeOutQuart'
                 },
-                // 交互配置，基于Chart.js交互文档 [[4]](#__4)
+                // 交互配置
                 interaction: {
                     mode: 'nearest',
                     intersect: true
@@ -151,22 +151,26 @@ async function createPortfolioPieChart() {
                         labels: {
                             padding: 20,
                             usePointStyle: true,
+                            pointStyle: 'circle',
                             font: {
                                 family: 'Poppins',
-                                size: 12
+                                size: 11,
+                                weight: '500'
                             },
-                            color: '#2c3e50'
+                            color: '#e0e5f3',
+                            boxWidth: 12,
+                            boxHeight: 12
                         }
                     },
-                    // 自定义工具提示，基于Chart.js工具提示文档 [[0]](#__0)
+                    // 自定义工具提示
                     tooltip: {
                         enabled: true,
-                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                        titleColor: '#ffffff',
-                        bodyColor: '#ffffff',
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
                         borderColor: '#00f5d4',
                         borderWidth: 1,
-                        cornerRadius: 8,
+                        cornerRadius: 12,
                         displayColors: true,
                         titleFont: {
                             family: 'Poppins',
@@ -177,11 +181,12 @@ async function createPortfolioPieChart() {
                             family: 'Poppins',
                             size: 12
                         },
+                        padding: 15,
                         callbacks: {
                             title: function(context) {
                                 return context[0].label;
                             },
-                            // 自定义工具提示内容 [[0]](#__0)
+                            // 修复数据处理：不再重复乘以100
                             label: function(context) {
                                 const symbol = context.label;
                                 const value = context.parsed;
@@ -193,7 +198,7 @@ async function createPortfolioPieChart() {
                                     `占比: ${percentage}%`
                                 ];
 
-                                // 如果不是现金，显示涨跌幅数据
+                                // 如果不是现金，显示涨跌幅数据（修复：不再乘以100）
                                 if (symbol !== 'CASH' && assetData.returns) {
                                     const returns = assetData.returns;
                                     lines.push(''); // 空行分隔
@@ -218,7 +223,7 @@ async function createPortfolioPieChart() {
         console.error('创建饼图失败:', error);
         const canvas = document.getElementById('portfolio-pie-chart');
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#d73a49';
+        ctx.fillStyle = '#ff4757';
         ctx.font = '16px Poppins';
         ctx.textAlign = 'center';
         ctx.fillText('饼图加载失败', canvas.width / 2, canvas.height / 2);
@@ -226,19 +231,35 @@ async function createPortfolioPieChart() {
 }
 
 /**
- * 生成渐变色彩数组
+ * 生成与主题匹配的色彩数组
  */
-function generateGradientColors(count) {
-    const colors = [
-        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
-        '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2'
+function generateThemeColors(count) {
+    // 青蓝色主题色彩方案
+    const baseColors = [
+        '#00f5d4', // 主题青色
+        '#6a82fb', // 主题蓝色
+        '#4ecdc4', // 青绿色
+        '#45b7d1', // 天蓝色
+        '#96ceb4', // 薄荷绿
+        '#ffeaa7', // 柔和黄
+        '#dda0dd', // 淡紫色
+        '#98d8c8', // 浅青色
+        '#f7dc6f', // 金黄色
+        '#bb8fce', // 薰衣草紫
+        '#85c1e9', // 浅蓝色
+        '#f8c471', // 橙黄色
+        '#82e0aa', // 浅绿色
+        '#f1948a', // 珊瑚色
+        '#d7bde2'  // 浅紫色
     ];
 
-    // 如果需要更多颜色，生成额外的颜色
+    // 如果需要更多颜色，使用HSL生成
+    const colors = [...baseColors];
     while (colors.length < count) {
         const hue = (colors.length * 137.508) % 360; // 黄金角度分布
-        colors.push(`hsl(${hue}, 70%, 65%)`);
+        const saturation = 65 + (colors.length % 3) * 10; // 65-85%
+        const lightness = 60 + (colors.length % 4) * 5;   // 60-75%
+        colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
 
     return colors.slice(0, count);

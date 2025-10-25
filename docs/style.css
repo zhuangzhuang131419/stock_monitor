@@ -79,7 +79,6 @@ body.modal-open {
     opacity: 1;
 }
 
-
 /* --- 内容区域与面板 --- */
 .content-area {
     padding: 30px 40px;
@@ -208,38 +207,91 @@ body.modal-open {
 .negative {
     color: var(--negative-color);
 }
-/* ================================================== */
 
-
+/* ========== 图表容器重新设计 ========== */
 .charts-container {
-    text-align: center;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    align-items: start;
+    margin-top: 30px;
 }
+
 .charts-container img {
-    max-width: 90%;
-    display: block;
-    margin: 0 auto 30px auto;
+    width: 100%;
     height: auto;
     border: 1px solid var(--container-border);
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-    background-color: #fff; /* 让图表背景为白色，与暗色主题形成对比 */
+    border-radius: 16px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    background-color: #fff;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* 新增：饼图容器样式 */
+.charts-container img:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+}
+
+/* ========== 全新饼图设计 ========== */
 .pie-chart-container {
-    max-width: 90%;
-    margin: 0 auto;
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.95);
+    position: relative;
+    background: linear-gradient(135deg,
+        rgba(29, 36, 58, 0.95) 0%,
+        rgba(38, 48, 77, 0.95) 50%,
+        rgba(29, 36, 58, 0.95) 100%);
     border: 1px solid var(--container-border);
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    border-radius: 16px;
+    padding: 25px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+}
+
+.pie-chart-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg,
+        rgba(0, 245, 212, 0.05) 0%,
+        rgba(106, 130, 251, 0.05) 50%,
+        rgba(0, 245, 212, 0.05) 100%);
+    border-radius: inherit;
+    z-index: -1;
+}
+
+.pie-chart-container:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0, 245, 212, 0.1);
+}
+
+.pie-chart-container::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(135deg, var(--accent-color), #6a82fb, var(--accent-color));
+    border-radius: inherit;
+    z-index: -2;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.pie-chart-container:hover::after {
+    opacity: 0.3;
 }
 
 #portfolio-pie-chart {
-    max-height: 400px;
     width: 100% !important;
-    height: auto !important;
+    height: 350px !important;
+    position: relative;
+    z-index: 1;
 }
 
 .summary-footer {
@@ -257,7 +309,6 @@ body.modal-open {
 .summary-footer p {
     margin: 0;
 }
-
 
 /* --- 编辑器面板 --- */
 .editor-actions {
@@ -338,13 +389,33 @@ input.invalid { border-color: var(--negative-color) !important; background-color
 
 .hidden { display: none !important; }
 
-/* --- 响应式适配 --- */
+/* ========== 响应式设计 ========== */
+@media (max-width: 1024px) {
+    .charts-container {
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+
+    .pie-chart-container {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+
+    #portfolio-pie-chart {
+        height: 300px !important;
+    }
+}
+
 @media (max-width: 768px) {
     body { padding: 0; }
     .main-container { border-radius: 0; max-width: 100%; border: none; }
     .content-area { padding: 20px; }
-    .charts-container img { max-width: 100%; }
-    .pie-chart-container { max-width: 100%; }
+    .charts-container { gap: 20px; }
+    .pie-chart-container {
+        padding: 20px;
+        max-width: 100%;
+    }
+    #portfolio-pie-chart { height: 280px !important; }
     .portfolio-item, .option-item-row { flex-wrap: wrap; }
     .returns-container { flex-wrap: wrap; gap: 15px; }
     .return-item { flex: 1 1 130px; }
