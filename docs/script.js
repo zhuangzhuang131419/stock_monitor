@@ -97,7 +97,7 @@ async function createPortfolioPieChart() {
 
         const filteredAssets = Object.entries(portfolioReturns).filter(([symbol, data]) => {
             const percentage = (data.total_value / totalValue);
-            return percentage >= 0.1; // 过滤掉小于0.1%的资产
+            return percentage >= 0.001; // 过滤掉小于0.1%的资产
         });
 
         // 准备图表数据
