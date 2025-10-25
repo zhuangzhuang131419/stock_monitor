@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (V21 - 增加悬停“浮起”动效)
+ * 创建交互式历史价值堆叠图 (V20 修正版 - 移除区域高亮 & 修复X轴)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -356,7 +356,7 @@ async function createPortfolioValueChart() {
             const values = row.split(',');
             if (values.length !== headers.length) return;
             const dateStr = values[headers.indexOf('date')];
-            if (!dateStr) return;
+            if (!dateStr) return; // 跳过没有日期的行
 
             labels.push(dateStr);
             totalValueData.push(parseFloat(values[headers.indexOf('total_value')]) || 0);
@@ -373,43 +373,30 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        let hoveredLegendIndex = null;
+        let lastHoveredIndex = null;
 
-        // --- 关键改动 1：实现高亮与“浮起”效果的核心函数 ---
-        const setHighlightAndOffset = (targetIndex) => {
-            const chart = portfolioValueChart;
-            if (!chart || hoveredLegendIndex === targetIndex) return;
-
-            const yMax = chart.scales.y.max;
-            const offsetValue = yMax * 0.02; // “浮起”高度为图表总高度的 2%
-
-            chart.data.datasets.forEach((dataset, index) => {
-                if (dataset.stack !== 'combined') return;
-
-                const baseData = assetData[dataset.label];
-                let currentOffset = 0;
-
-                // 如果有高亮目标 (targetIndex 不是 null)
-                if (targetIndex !== null) {
-                    // 并且当前数据集是目标或在目标之上，则应用偏移
-                    if (index >= targetIndex) {
-                        currentOffset = offsetValue;
-                    }
+        const highlightDataset = (targetIndex) => {
+            if (targetIndex === lastHoveredIndex) return;
+            const chartDatasets = portfolioValueChart.data.datasets;
+            if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
+                const prevDataset = chartDatasets[lastHoveredIndex];
+                if (prevDataset && prevDataset.stack === 'combined') {
+                    prevDataset.backgroundColor = originalColorsRgba[lastHoveredIndex];
                 }
-
-                // 更新数据以实现“浮起”
-                dataset.data = baseData.map(y => y + currentOffset);
-
-                // 应用高亮颜色
-                dataset.backgroundColor = (index === targetIndex)
-                    ? highlightedColorsRgba[index]
-                    : originalColorsRgba[index];
-            });
-
-            hoveredLegendIndex = targetIndex;
-            chart.update(); // 使用动画更新图表
+            }
+            if (targetIndex !== null && targetIndex > -1) {
+                const targetDataset = chartDatasets[targetIndex];
+                if (targetDataset && targetDataset.stack === 'combined') {
+                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
+                }
+            }
+            lastHoveredIndex = targetIndex;
+            portfolioValueChart.update('none');
         };
 
+        const resetHighlight = () => highlightDataset(-1);
+
+        // --- 关键改动 2：动态计算X轴的时间单位 ---
         let timeUnit = 'day';
         if (labels.length > 1) {
             const firstDate = new Date(labels[0]);
@@ -426,11 +413,7 @@ async function createPortfolioValueChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                // --- 关键改动 2：启用平滑的动画效果 ---
-                animation: {
-                    duration: 250,
-                    easing: 'easeOutCubic'
-                },
+                animation: { duration: 0 },
                 interaction: {
                     mode: 'index',
                     intersect: false,
@@ -440,9 +423,8 @@ async function createPortfolioValueChart() {
                     legend: {
                         display: true, position: 'bottom',
                         labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
-                        // --- 关键改动 3：更新图例的悬停和离开事件 ---
-                        onHover: (event, legendItem) => setHighlightAndOffset(legendItem.datasetIndex),
-                        onLeave: () => setHighlightAndOffset(null), // 传入 null 来重置
+                        onHover: (event, legendItem) => highlightDataset(legendItem.datasetIndex),
+                        onLeave: resetHighlight,
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3',
@@ -451,29 +433,27 @@ async function createPortfolioValueChart() {
                         filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
                         callbacks: {
                              title: (context) => context[0].label,
-                             // --- 关键改动 4：修正Tooltip，使其始终显示原始值 ---
                              label: (context) => {
                                  let label = context.dataset.label || '';
                                  if (label) label += ': ';
-
-                                 // 从原始数据源 `assetData` 获取值，避免显示“浮起”后的错误数据
-                                 const assetName = context.dataset.label;
-                                 const dataPointIndex = context.dataIndex;
-                                 const originalValue = assetData[assetName] ? assetData[assetName][dataPointIndex] : context.raw;
-
-                                 label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(originalValue);
+                                 label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw);
                                  return label;
                              }
                         }
                     },
                 },
                 scales: {
+                     // --- 关键改动 2：应用动态时间单位和更合理的格式 ---
                      x: {
                          type: 'time',
                          time: {
-                             unit: timeUnit,
+                             unit: timeUnit, // 应用动态计算出的时间单位
                              tooltipFormat: 'yyyy-MM-dd',
-                             displayFormats: { day: 'MMM d', month: 'yyyy MMM', year: 'yyyy' }
+                             displayFormats: {
+                                 day: 'MMM d',
+                                 month: 'yyyy MMM',
+                                 year: 'yyyy'
+                             }
                          },
                          grid: { color: 'rgba(138, 153, 192, 0.15)' },
                          ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }
@@ -486,6 +466,8 @@ async function createPortfolioValueChart() {
                 }
             }
         });
+
+        // --- 关键改动 1：已删除所有 canvas.addEventListener 代码 ---
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
