@@ -287,6 +287,7 @@ function toRgba(hex, alpha = 1) {
 
 /**
  * 创建交互式历史价值堆叠图
+ * [修复] 修复了图例高亮时pointStyle回调函数只绘制边框未填充颜色的问题，该问题导致字体大小、色球大小等其他高亮样式失效。
  * [优化] 1. 高亮效果升级为动态“光泽扫过”动画，确保在任何底色上都清晰可见。
  * [优化] 2. 保留并优化图例高亮交互（文字变大、色球出现边框）。
  */
@@ -463,23 +464,30 @@ async function createPortfolioValueChart() {
                                 size: context.index === lastHoveredIndex ? 13 : 11,
                                 weight: context.index === lastHoveredIndex ? '600' : 'normal'
                             }),
-                            // 通过 pointStyle 配置实现边框
+                            // ========== 代码修改开始 ==========
                             pointStyle: context => {
                                 if (context.index === lastHoveredIndex) {
-                                    const canvas = context.chart.canvas;
-                                    const style = canvas.getContext('2d');
-                                    const image = style.createImageData(12, 12); // 创建一个12x12的图像
+                                    const chartCanvas = context.chart.canvas;
+                                    const chartCtx = chartCanvas.getContext('2d');
+                                    const image = chartCtx.createImageData(12, 12);
                                     const radius = 6;
+                                    const borderColor = [0, 245, 212, 255]; // 边框颜色 [R, G, B, A]
+
+                                    // 从 originalColorsRgba 获取填充色
+                                    const colorString = originalColorsRgba[context.index];
+                                    const colorParts = colorString.match(/[\d.]+/g).map(Number);
+                                    const fillColor = [colorParts[0], colorParts[1], colorParts[2], 255]; // 使用不透明填充
+
                                     for (let x = 0; x < 12; x++) {
                                         for (let y = 0; y < 12; y++) {
-                                            const dist = Math.sqrt((x - radius) ** 2 + (y - radius) ** 2);
-                                            if (dist > radius - 1.5 && dist <= radius) { // 这是边框
-                                                const [r, g, b] = [0, 245, 212];
+                                            const dist = Math.sqrt(Math.pow(x - radius, 2) + Math.pow(y - radius, 2));
+                                            if (dist <= radius) { // 仅在圆形区域内绘制
                                                 const i = (y * 12 + x) * 4;
-                                                image.data[i] = r;
-                                                image.data[i + 1] = g;
-                                                image.data[i + 2] = b;
-                                                image.data[i + 3] = 255;
+                                                if (dist > radius - 1.5) { // 边框区域
+                                                    image.data.set(borderColor, i);
+                                                } else { // 填充区域
+                                                    image.data.set(fillColor, i);
+                                                }
                                             }
                                         }
                                     }
@@ -487,6 +495,7 @@ async function createPortfolioValueChart() {
                                 }
                                 return 'circle';
                             },
+                            // ========== 代码修改结束 ==========
                             boxWidth: context => (context.index === lastHoveredIndex ? 12 : 10),
                             boxHeight: context => (context.index === lastHoveredIndex ? 12 : 10),
                             filter: (item) => item.text !== 'Total Value'
