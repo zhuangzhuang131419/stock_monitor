@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v16 - 辉光高亮 & 悬停修复版)
+ * 创建交互式历史价值堆叠图 (v17 - 区域高亮最终版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -310,17 +310,14 @@ async function createPortfolioValueChart() {
         const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
 
         const themeColorsHex = generateThemeColors(assetColumns.length);
-        // 关键：所有颜色统一为RGBA格式，避免初始渲染BUG
         const themeColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
-        // 关键修正1：定义一个用于高亮的“辉光”颜色
-        const glowColor = '#00f5d4'; // 使用主题的强调色
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: [],
             backgroundColor: themeColorsRgba[index],
-            borderColor: themeColorsRgba[index], // 初始边框颜色
-            borderWidth: 0, // 关键修正1：初始状态下边框宽度为0，即不显示
+            borderColor: themeColorsRgba[index], // 用于图例和提示框的颜色块
+            borderWidth: 0, // 区域本身不显示边框
             fill: 'origin',
             stack: 'combined',
             pointRadius: 0,
@@ -362,33 +359,57 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
+        // --- 关键修正：全新的区域高亮逻辑 ---
         let lastHoveredIndex = null;
 
-        // 关键修正1：实现全新的“辉光”高亮逻辑
+        /**
+         * 根据输入的RGBA颜色，生成一个更亮的高亮颜色
+         * @param {string} rgbaColor - "rgba(r, g, b, a)" 格式的颜色
+         * @returns {string} - 一个更亮的 RGBA 颜色
+         */
+        const getHighlightColor = (rgbaColor) => {
+            const parts = rgbaColor.match(/[\d.]+/g);
+            if (!parts || parts.length < 3) return 'rgba(255, 255, 255, 0.5)'; // 备用颜色
+
+            let [r, g, b, a] = parts.map(Number);
+            a = (a === undefined) ? 1 : a;
+
+            // 通过给RGB三通道增加一个固定值来提亮颜色
+            const amount = 40;
+            r = Math.min(255, r + amount);
+            g = Math.min(255, g + amount);
+            b = Math.min(255, b + amount);
+
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+        };
+
+        /**
+         * 通过改变区域背景色来高亮指定索引的数据集
+         * @param {number} targetIndex - 要高亮的数据集索引
+         */
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
 
             const chartDatasets = portfolioValueChart.data.datasets;
 
-            // 步骤1：如果之前有高亮的区域，将其恢复原状
+            // 步骤1: 恢复之前高亮的区域为其原始颜色
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
-                    prevDataset.borderWidth = 0; // 恢复边框宽度为0
+                    prevDataset.backgroundColor = themeColorsRgba[lastHoveredIndex];
                 }
             }
 
-            // 步骤2：为新的目标区域添加“辉光”效果
+            // 步骤2: 高亮新的目标区域，将其颜色变得更亮
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    targetDataset.borderColor = glowColor; // 设置为辉光颜色
-                    targetDataset.borderWidth = 3;       // 设置一个较宽的边框
+                    targetDataset.backgroundColor = getHighlightColor(themeColorsRgba[targetIndex]);
                 }
             }
 
             lastHoveredIndex = targetIndex;
-            portfolioValueChart.update('none'); // 无动画更新图表
+            portfolioValueChart.update('none'); // 无动画更新，避免闪烁
         };
 
         const resetHighlight = () => highlightDataset(-1);
@@ -422,7 +443,9 @@ async function createPortfolioValueChart() {
                              label: function(context) {
                                  let label = context.dataset.label || '';
                                  if (label) label += ': ';
-                                 label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed.y);
+                                 // 在堆叠图中，context.parsed.y 是累加值，要获取单个资产的值，需要用 raw
+                                 const singleValue = context.raw;
+                                 label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(singleValue);
                                  return label;
                              }
                         }
@@ -435,16 +458,15 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // 关键修正2：彻底修复悬停检测逻辑
+        // --- 悬停检测逻辑 (与 V16 相同，因为它是正确的) ---
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const chart = portfolioValueChart;
             if (e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
-                return; // 鼠标在图例上，由图例事件处理
+                return;
             }
 
             const points = chart.getElementsAtEventForMode(e, 'index', { intersect: false });
 
-            // 步骤1：过滤，只保留属于堆叠区域的元素，并确保排序正确
             const stackedPoints = points
                 .filter(p => chart.data.datasets[p.datasetIndex].stack === 'combined')
                 .sort((a, b) => a.datasetIndex - b.datasetIndex);
@@ -455,15 +477,26 @@ async function createPortfolioValueChart() {
             }
 
             let foundIndex = -1;
-            // 步骤2：从最顶部的区域开始向下查找
-            // stackedPoints是按datasetIndex排序的，所以视觉上是从底部到顶部
-            // 我们需要从后往前遍历，即从视觉顶部开始检查
             for (let i = stackedPoints.length - 1; i >= 0; i--) {
                 const point = stackedPoints[i];
-                // 如果鼠标的Y坐标大于或等于当前区域顶部的Y坐标，说明鼠标就在这个区域内
-                if (e.offsetY >= point.y) {
+                const chartArea = chart.chartArea;
+
+                // 获取当前区域的底部边界 Y 坐标
+                // 如果是第一个区域(i=0)，其底部是图表底部；否则，其底部是它下面那个区域的顶部
+                const bottomPointY = (i > 0) ? stackedPoints[i - 1].y : chartArea.bottom;
+
+                // 判断鼠标的Y坐标是否落在当前区域的顶部(point.y)和底部(bottomPointY)之间
+                if (e.offsetY >= point.y && e.offsetY < bottomPointY) {
                     foundIndex = point.datasetIndex;
-                    break; // 找到后立即退出
+                    break;
+                }
+            }
+
+            // 如果循环后仍未找到（通常意味着鼠标在最底部的区域），直接指定最底部的区域
+            if (foundIndex === -1 && stackedPoints.length > 0) {
+                const bottomMostPoint = stackedPoints[0];
+                if (e.offsetY >= bottomMostPoint.y) {
+                    foundIndex = bottomMostPoint.datasetIndex;
                 }
             }
 
