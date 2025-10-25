@@ -1,5 +1,5 @@
 {
-  "analysis_date": "2025-10-25T11:54:24.615009",
+  "analysis_date": "2025-10-25T03:57:45.235840",
   "portfolio_returns": {
     "ADBE": {
       "current_price": 353.52,
@@ -64,19 +64,6 @@
         "year_to_date": 7.3,
         "past_30_trading_days": -2.15,
         "past_250_trading_days": 3.76
-      }
-    },
-    "NVDA_2026-01-16_130_PUT": {
-      "current_price": 1.18,
-      "total_value": 590.0,
-      "asset_type": "option",
-      "returns": {
-        "previous_trading_day": -11.94,
-        "week_to_date": -23.87,
-        "month_to_date": -23.87,
-        "year_to_date": -94.37,
-        "past_30_trading_days": -52.23,
-        "past_250_trading_days": -94.72
       }
     },
     "V": {
