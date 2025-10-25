@@ -292,15 +292,15 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v8 - 诊断版)
+ * 创建交互式历史价值堆叠图 (v10 - 终极诊断版)
  */
 async function createPortfolioValueChart() {
+    // ... (这部分数据加载和图表配置的代码与之前版本完全相同，因此省略以保持简洁) ...
+    // ... (The data loading and chart configuration part is identical to previous versions, so it's omitted for brevity) ...
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
     try {
-        // ... (这部分数据加载和图表配置的代码与 V7 完全相同，因此省略以保持简洁) ...
-        // ... (The data loading and chart configuration part is identical to V7, so it's omitted for brevity) ...
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
         if (!response.ok) {
             throw new Error(`无法加载历史数据文件 (状态: ${response.status})`);
@@ -437,7 +437,7 @@ async function createPortfolioValueChart() {
         });
 
 
-        // --- 从这里开始是 V8 诊断版的核心 ---
+        // --- 从这里开始是 V10 终极诊断版的核心 ---
         let lastHoveredLegendIndex = null;
         const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
@@ -455,37 +455,31 @@ async function createPortfolioValueChart() {
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const legend = portfolioValueChart.legend;
 
-            // --- 诊断点 1: 报告鼠标的实时坐标 ---
-            console.log(`--- Mouse Move --- Coords: (x: ${e.offsetX}, y: ${e.offsetY})`);
+            // --- 终极诊断点：无论如何都打印出坐标进行对比 ---
+            if (legend) {
+                console.log(
+                    `Mouse Y: ${e.offsetY.toFixed(0)}  |  ` +
+                    `Legend Area: (top: ${legend.top?.toFixed(0)}, bottom: ${legend.bottom?.toFixed(0)})  |  ` +
+                    `Hitboxes found: ${legend.hitboxes?.length || 0}`
+                );
+            } else {
+                console.log('Legend object not found!');
+                return;
+            }
+            // --- 诊断结束 ---
 
-            if (!legend || !legend.hitboxes || legend.hitboxes.length === 0) {
+            if (!legend.hitboxes || legend.hitboxes.length === 0) {
                 return;
             }
 
             const legendItems = legend.legendItems;
             let hoveredIndex = -1;
 
-            // --- 诊断点 2: 报告正在检查的图例项范围 ---
-            // 为了避免信息刷屏，只在鼠标进入图例的大致垂直区域时才打印
-            if (e.offsetY > legend.top - 10 && e.offsetY < legend.bottom + 10) {
-                console.log(`[DEBUG] Mouse is near legend. Checking ${legend.hitboxes.length} hitboxes...`);
-                for (let i = 0; i < legend.hitboxes.length; i++) {
-                    const hitbox = legend.hitboxes[i];
-                    if (hitbox) {
-                        console.log(`  - Hitbox #${i} for '${legendItems[i]?.text}': {left: ${hitbox.left.toFixed(0)}, top: ${hitbox.top.toFixed(0)}, width: ${hitbox.width.toFixed(0)}, height: ${hitbox.height.toFixed(0)}}`);
-                    }
-                }
-            }
-
-            // 核心命中检测逻辑
             for (let i = 0; i < legend.hitboxes.length; i++) {
                 const hitbox = legend.hitboxes[i];
                 if (hitbox && e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
                     e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height)
                 {
-                    // --- 诊断点 3: 报告成功命中 ---
-                    console.log(`%c[SUCCESS] HIT on hitbox #${i} ('${legendItems[i]?.text}')!`, 'color: #00f5d4; font-weight: bold;');
-
                     if(legendItems[i] && legendItems[i].text !== 'Total Value') {
                         hoveredIndex = legendItems[i].datasetIndex;
                         break;
@@ -497,8 +491,6 @@ async function createPortfolioValueChart() {
                 return;
             }
 
-            // --- 诊断点 4: 报告状态变化，即将更新图表 ---
-            console.log(`%c[STATE] State changed! New hoveredIndex: ${hoveredIndex}. Updating chart.`, 'color: #ffc107;');
             lastHoveredLegendIndex = hoveredIndex;
 
             if (hoveredIndex !== -1) {
