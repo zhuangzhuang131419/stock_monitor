@@ -292,7 +292,7 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v3 - 最终修正版)
+ * 创建交互式历史价值堆叠图 (v4 - 终极性能优化版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -339,11 +339,14 @@ async function createPortfolioValueChart() {
 
         const themeColors = generateThemeColors(assetColumns.length);
 
+        // --- 核心修正 1：预先计算并存储所有半透明背景色 ---
+        const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
+
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            // --- 修改点 1：使用 toRgba 函数正确生成带透明度的背景色 ---
-            backgroundColor: toRgba(themeColors[index], 0.5), // 0.5 代表 50% 透明度
+            // --- 核心修正 2：直接使用预先计算好的颜色 ---
+            backgroundColor: backgroundColorsRgba[index],
             borderColor: themeColors[index],
             fill: 'origin',
             stack: 'combined',
@@ -402,6 +405,7 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
+                        // --- 核心修正 3：事件处理逻辑大幅简化，只从数组取色 ---
                         onHover: (event, legendItem, legend) => {
                             const chart = legend.chart;
                             const hoveredDatasetIndex = legendItem.datasetIndex;
@@ -413,8 +417,8 @@ async function createPortfolioValueChart() {
                                 if (index !== hoveredDatasetIndex) {
                                     dataset.backgroundColor = dimmedColor;
                                 } else {
-                                    // --- 修改点 2：使用 toRgba 恢复高亮颜色 ---
-                                    dataset.backgroundColor = toRgba(dataset.borderColor, 0.5);
+                                    // 直接从预计算的数组中恢复高亮颜色
+                                    dataset.backgroundColor = backgroundColorsRgba[index];
                                 }
                             });
                             chart.update();
@@ -423,8 +427,8 @@ async function createPortfolioValueChart() {
                             const chart = legend.chart;
                             chart.data.datasets.forEach((dataset, index) => {
                                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    // --- 修改点 3：使用 toRgba 恢复所有原始颜色 ---
-                                    dataset.backgroundColor = toRgba(dataset.borderColor, 0.5);
+                                    // 直接从预计算的数组中恢复所有原始颜色
+                                    dataset.backgroundColor = backgroundColorsRgba[index];
                                 }
                             });
                             chart.update();
