@@ -292,10 +292,9 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v5 - 调试专用版)
+ * 创建交互式历史价值堆叠图 (v6 - 最终事件修复版)
  */
 async function createPortfolioValueChart() {
-    console.log('[DEBUG] Chart Function Started: createPortfolioValueChart');
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
@@ -339,12 +338,7 @@ async function createPortfolioValueChart() {
         });
 
         const themeColors = generateThemeColors(assetColumns.length);
-
-        // --- 预计算颜色 ---
-        console.log('[DEBUG] Pre-calculating RGBA colors...');
         const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
-        console.log('[DEBUG] Pre-calculated Colors:', backgroundColorsRgba);
-
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
@@ -378,8 +372,6 @@ async function createPortfolioValueChart() {
             portfolioValueChart.destroy();
         }
 
-        console.log('[DEBUG] Creating new Chart instance...');
-
         portfolioValueChart = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
@@ -410,39 +402,7 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // --- 调试核心：在事件中打印日志 ---
-                        onHover: function(event, legendItem, legend) {
-                            console.log('--- [DEBUG] Legend onHover Event Fired! ---');
-                            console.log('[DEBUG] Hovered Item:', legendItem);
-
-                            const chart = legend.chart;
-                            const hoveredDatasetIndex = legendItem.datasetIndex;
-                            const dimmedColor = 'rgba(100, 116, 139, 0.2)';
-
-                            chart.data.datasets.forEach((dataset, index) => {
-                                if (dataset.label === 'Total Value' || dataset.hidden) return;
-
-                                if (index !== hoveredDatasetIndex) {
-                                    dataset.backgroundColor = dimmedColor;
-                                } else {
-                                    dataset.backgroundColor = backgroundColorsRgba[index];
-                                    console.log(`[DEBUG] Highlighting index ${index} with color ${backgroundColorsRgba[index]}`);
-                                }
-                            });
-                            chart.update();
-                            console.log('[DEBUG] Chart updated on hover.');
-                        },
-                        onLeave: function(event, legendItem, legend) {
-                            console.log('--- [DEBUG] Legend onLeave Event Fired! ---');
-                            const chart = legend.chart;
-                            chart.data.datasets.forEach((dataset, index) => {
-                                if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    dataset.backgroundColor = backgroundColorsRgba[index];
-                                }
-                            });
-                            chart.update();
-                            console.log('[DEBUG] Chart restored on leave.');
-                        }
+                        // --- 核心修正 1：移除无效的 onHover 和 onLeave 事件 ---
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -474,7 +434,75 @@ async function createPortfolioValueChart() {
                 }
             }
         });
-        console.log('[DEBUG] Chart instance created successfully.');
+
+        // --- 核心修正 2：添加全新的、可靠的外部事件监听器 ---
+        let lastHoveredLegendIndex = null;
+        const dimmedColor = 'rgba(100, 116, 139, 0.2)';
+
+        // 恢复所有图例颜色的函数
+        const restoreLegendColors = () => {
+            portfolioValueChart.data.datasets.forEach((dataset, index) => {
+                if (dataset.label !== 'Total Value' && !dataset.hidden) {
+                    dataset.backgroundColor = backgroundColorsRgba[index];
+                }
+            });
+            portfolioValueChart.update('none'); // 使用 'none' 动画模式以提高性能
+        };
+
+        // 监听鼠标在图表画布上的移动
+        portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
+            const legend = portfolioValueChart.legend;
+            // getHitBoxes() 是一个内部方法，但在这里非常有效
+            const legendItems = legend.legendItems;
+            let hoveredIndex = -1;
+
+            // 遍历所有图例项，检查鼠标是否在它们的“命中框”内
+            for (let i = 0; i < legend.hitboxes.length; i++) {
+                const hitbox = legend.hitboxes[i];
+                if (e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
+                    e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height)
+                {
+                    // 确保我们找到的图例项是有效的
+                    if(legendItems[i] && legendItems[i].text !== 'Total Value') {
+                        hoveredIndex = legendItems[i].datasetIndex;
+                        break;
+                    }
+                }
+            }
+
+            // 如果悬停状态没有改变，则不执行任何操作以优化性能
+            if (hoveredIndex === lastHoveredLegendIndex) {
+                return;
+            }
+
+            lastHoveredLegendIndex = hoveredIndex;
+
+            if (hoveredIndex !== -1) {
+                // 如果悬停在某个图例上，则调暗其他图例
+                portfolioValueChart.data.datasets.forEach((dataset, index) => {
+                    if (dataset.label === 'Total Value' || dataset.hidden) return;
+
+                    if (index !== hoveredIndex) {
+                        dataset.backgroundColor = dimmedColor;
+                    } else {
+                        dataset.backgroundColor = backgroundColorsRgba[index];
+                    }
+                });
+                portfolioValueChart.update('none');
+            } else {
+                // 如果没有悬停在任何图例上，则恢复所有颜色
+                restoreLegendColors();
+            }
+        });
+
+        // 当鼠标完全离开图表时，也恢复所有颜色
+        portfolioValueChart.canvas.addEventListener('mouseout', () => {
+             if (lastHoveredLegendIndex !== null) {
+                lastHoveredLegendIndex = null;
+                restoreLegendColors();
+             }
+        });
+
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
