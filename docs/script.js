@@ -262,7 +262,7 @@ async function createPortfolioValueChart() {
         }
         const csvText = await response.text();
 
-        // 1. 解析CSV数据
+        // (数据解析部分无变化)
         const lines = csvText.trim().split('\n');
         if (lines.length < 2) throw new Error('历史数据不足');
 
@@ -270,9 +270,9 @@ async function createPortfolioValueChart() {
         const dateIndex = headers.indexOf('date');
         const totalValueIndex = headers.indexOf('total_value');
 
-        const dataRows = lines.reverse(); // 数据按时间升序排列
-        const labels = []; // 日期
-        const assetData = {}; // 存储每个资产的历史价值
+        const dataRows = lines.reverse();
+        const labels = [];
+        const assetData = {};
         const totalValueData = [];
 
         const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
@@ -297,12 +297,12 @@ async function createPortfolioValueChart() {
             });
         });
 
-        // 2. 创建Chart.js数据集
+        // (数据集创建部分无变化)
         const themeColors = generateThemeColors(assetColumns.length);
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            backgroundColor: themeColors[index] + '80', // 添加透明度
+            backgroundColor: themeColors[index] + '80',
             borderColor: themeColors[index],
             fill: 'origin',
             stack: 'combined',
@@ -326,7 +326,7 @@ async function createPortfolioValueChart() {
             order: -1,
         });
 
-        // 3. 渲染图表
+        // (渲染图表部分)
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) {
             portfolioValueChart.destroy();
@@ -347,7 +347,7 @@ async function createPortfolioValueChart() {
                         font: { size: 16, family: 'Poppins' },
                         padding: { bottom: 20 }
                     },
-                    legend: { display: false }, // 标签太多，暂时禁用图例
+                    legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
                         titleColor: '#00f5d4',
@@ -358,18 +358,39 @@ async function createPortfolioValueChart() {
                         padding: 12,
                         titleFont: { family: 'Poppins', weight: 'bold' },
                         bodyFont: { family: 'Poppins' },
+                        // --- 新增：Tooltip过滤器 ---
+                        // 这个函数会在显示tooltip的每一项之前被调用
+                        // tooltipItem.raw 包含了原始数据值
+                        // 如果返回 true，则显示该项；如果返回 false，则隐藏该项
+                        filter: function(tooltipItem) {
+                            // 我们只显示那些价值大于0的资产项
+                            // 同时也确保 "Total Value" 这一行总是显示
+                            return tooltipItem.raw > 0 || tooltipItem.dataset.label === 'Total Value';
+                        }
+                        // --- 过滤器结束 ---
                     },
                 },
                 scales: {
                     x: {
                         type: 'time',
                         time: {
-                            unit: 'day',
                             tooltipFormat: 'MMM dd, yyyy',
-                            displayFormats: { day: 'MMM dd' }
+                            displayFormats: {
+                                day: 'MMM dd',
+                                week: 'MMM dd',
+                                month: 'MMM yyyy',
+                                year: 'yyyy'
+                            }
                         },
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45 },
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 10
+                        },
                     },
                     y: {
                         stacked: true,
