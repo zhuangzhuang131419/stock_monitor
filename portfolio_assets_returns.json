@@ -1,5 +1,5 @@
 {
-  "analysis_date": "2025-10-25T12:06:57.924220",
+  "analysis_date": "2025-10-25T05:30:20.348334",
   "portfolio_returns": {
     "ADBE": {
       "current_price": 353.52,
@@ -38,6 +38,19 @@
         "year_to_date": 8.56,
         "past_30_trading_days": -0.13,
         "past_250_trading_days": 7.5
+      }
+    },
+    "CASH": {
+      "current_price": 1.0,
+      "total_value": 10000.0,
+      "asset_type": "cash",
+      "returns": {
+        "previous_trading_day": 0.0,
+        "week_to_date": 0.0,
+        "month_to_date": 0.0,
+        "year_to_date": 0.0,
+        "past_30_trading_days": 0.0,
+        "past_250_trading_days": 0.0
       }
     },
     "GOOGL": {
