@@ -287,9 +287,8 @@ function toRgba(hex, alpha = 1) {
 
 /**
  * 创建交互式历史价值堆叠图
- * [修复] 修复了图例高亮时pointStyle回调函数只绘制边框未填充颜色的问题，该问题导致字体大小、色球大小等其他高亮样式失效。
- * [优化] 1. 高亮效果升级为动态“光泽扫过”动画，确保在任何底色上都清晰可见。
- * [优化] 2. 保留并优化图例高亮交互（文字变大、色球出现边框）。
+ * [优化] 1. 高亮效果升级为动态"光泽扫过"动画
+ * [优化] 2. 图例高亮时使用与资产相同的颜色+发光效果
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -297,7 +296,7 @@ async function createPortfolioValueChart() {
 
     // --- 动画状态变量 ---
     let shimmerAnimationId = null;
-    let shimmerPosition = 0; // 光泽效果的位置 (0 to 1.5, >1 a pause)
+    let shimmerPosition = 0;
 
     try {
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
@@ -321,24 +320,20 @@ async function createPortfolioValueChart() {
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: [],
-            // --- 核心优化：使用函数式选项实现动态光泽背景 ---
             backgroundColor: context => {
                 const chart = context.chart;
                 const { ctx, chartArea } = chart;
                 if (!chartArea) return originalColorsRgba[index];
 
-                // 如果当前数据集是高亮状态，则应用光泽效果
                 if (context.datasetIndex === lastHoveredIndex) {
                     const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-                    const shimmerWidth = 0.15; // 光泽的宽度
-                    const shimmerColor = 'rgba(255, 255, 255, 0.6)'; // 光泽的颜色
+                    const shimmerWidth = 0.15;
+                    const shimmerColor = 'rgba(255, 255, 255, 0.6)';
                     const baseColor = originalColorsRgba[index];
 
-                    // 计算光泽带的位置
                     const start = shimmerPosition - shimmerWidth;
                     const end = shimmerPosition + shimmerWidth;
 
-                    // 创建渐变
                     gradient.addColorStop(0, baseColor);
                     if (start > 0) gradient.addColorStop(Math.max(0, start), baseColor);
                     gradient.addColorStop(Math.min(1, shimmerPosition), shimmerColor);
@@ -348,7 +343,7 @@ async function createPortfolioValueChart() {
                     return gradient;
                 }
 
-                return originalColorsRgba[index]; // 否则返回原始半透明色
+                return originalColorsRgba[index];
             },
             borderColor: 'transparent',
             borderWidth: 0,
@@ -398,9 +393,9 @@ async function createPortfolioValueChart() {
 
         // --- 动画循环 ---
         const shimmerLoop = () => {
-            shimmerPosition = (shimmerPosition + 0.01) % 1.5; // 1.5 để có khoảng dừng
+            shimmerPosition = (shimmerPosition + 0.01) % 1.5;
             if (portfolioValueChart) {
-                portfolioValueChart.update('none'); // 只更新，不触发动画
+                portfolioValueChart.update('none');
             }
             shimmerAnimationId = requestAnimationFrame(shimmerLoop);
         };
@@ -410,18 +405,15 @@ async function createPortfolioValueChart() {
             if (targetIndex === lastHoveredIndex) return;
             lastHoveredIndex = targetIndex;
 
-            // 停止旧的动画
             if (shimmerAnimationId) {
                 cancelAnimationFrame(shimmerAnimationId);
                 shimmerAnimationId = null;
             }
 
-            // 如果有高亮项，则启动动画
             if (targetIndex !== null) {
                 shimmerPosition = 0;
                 shimmerLoop();
             } else {
-                // 如果没有高亮项，立即重绘一次以恢复正常状态
                 if (portfolioValueChart) portfolioValueChart.update('none');
             }
         };
@@ -447,62 +439,58 @@ async function createPortfolioValueChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: { duration: 0 }, // 禁用 Chart.js 的默认动画
+                animation: { duration: 0 },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
+                    title: {
+                        display: true,
+                        text: '资产价值历史趋势',
+                        color: '#e0e5f3',
+                        font: { size: 16, family: 'Poppins' },
+                        padding: { bottom: 20 }
+                    },
                     legend: {
-                        display: true, position: 'bottom',
+                        display: true,
+                        position: 'bottom',
                         labels: {
                             padding: 15,
                             usePointStyle: true,
                             pointStyle: 'circle',
                             color: '#e0e5f3',
-                            // --- 优化：高亮时图例项变大 + 加边框 ---
-                            font: context => ({
+                            font: {
                                 family: 'Poppins',
-                                size: context.index === lastHoveredIndex ? 13 : 11,
-                                weight: context.index === lastHoveredIndex ? '600' : 'normal'
-                            }),
-                            // ========== 代码修改开始 ==========
-                            pointStyle: context => {
-                                if (context.index === lastHoveredIndex) {
-                                    const chartCanvas = context.chart.canvas;
-                                    const chartCtx = chartCanvas.getContext('2d');
-                                    const image = chartCtx.createImageData(12, 12);
-                                    const radius = 6;
-                                    const borderColor = [0, 245, 212, 255]; // 边框颜色 [R, G, B, A]
-
-                                    // 从 originalColorsRgba 获取填充色
-                                    const colorString = originalColorsRgba[context.index];
-                                    const colorParts = colorString.match(/[\d.]+/g).map(Number);
-                                    const fillColor = [colorParts[0], colorParts[1], colorParts[2], 255]; // 使用不透明填充
-
-                                    for (let x = 0; x < 12; x++) {
-                                        for (let y = 0; y < 12; y++) {
-                                            const dist = Math.sqrt(Math.pow(x - radius, 2) + Math.pow(y - radius, 2));
-                                            if (dist <= radius) { // 仅在圆形区域内绘制
-                                                const i = (y * 12 + x) * 4;
-                                                if (dist > radius - 1.5) { // 边框区域
-                                                    image.data.set(borderColor, i);
-                                                } else { // 填充区域
-                                                    image.data.set(fillColor, i);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    return image;
-                                }
-                                return 'circle';
+                                size: 11,
+                                weight: 'normal'
                             },
-                            // ========== 代码修改结束 ==========
-                            boxWidth: context => (context.index === lastHoveredIndex ? 12 : 10),
-                            boxHeight: context => (context.index === lastHoveredIndex ? 12 : 10),
-                            filter: (item) => item.text !== 'Total Value'
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            filter: (item) => item.text !== 'Total Value',
+                            generateLabels: (chart) => {
+                                const datasets = chart.data.datasets;
+                                return datasets
+                                    .filter(ds => ds.label !== 'Total Value')
+                                    .map((dataset, i) => {
+                                        const isHighlighted = i === lastHoveredIndex;
+                                        return {
+                                            text: dataset.label,
+                                            fillStyle: originalColorsRgba[i],
+                                            strokeStyle: isHighlighted ? themeColorsHex[i] : 'transparent',
+                                            lineWidth: isHighlighted ? 2.5 : 0,
+                                            hidden: false,
+                                            index: i,
+                                            fontColor: '#e0e5f3',
+                                            fontSize: isHighlighted ? 13 : 11,
+                                            fontStyle: isHighlighted ? 'bold' : 'normal',
+                                            pointStyle: 'circle',
+                                            boxWidth: isHighlighted ? 12 : 10,
+                                            boxHeight: isHighlighted ? 12 : 10,
+                                        };
+                                    });
+                            }
                         },
                         onHover: (event, legendItem) => {
                             isHoveringLegend = true;
-                            highlightDataset(legendItem.datasetIndex);
+                            highlightDataset(legendItem.index);
                         },
                         onLeave: () => {
                             isHoveringLegend = false;
@@ -510,9 +498,15 @@ async function createPortfolioValueChart() {
                         },
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3',
-                        borderColor: '#00f5d4', borderWidth: 1, cornerRadius: 8, padding: 12,
-                        titleFont: { family: 'Poppins', weight: 'bold' }, bodyFont: { family: 'Poppins' },
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        titleFont: { family: 'Poppins', weight: 'bold' },
+                        bodyFont: { family: 'Poppins' },
                         filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
                         callbacks: {
                             title: (context) => context[0].label,
@@ -526,13 +520,87 @@ async function createPortfolioValueChart() {
                     },
                 },
                 scales: {
-                    x: { type: 'time', time: { unit: timeUnit, tooltipFormat: 'yyyy-MM-dd', displayFormats: { day: 'MMM d', month: 'yyyy MMM', year: 'yyyy' } }, grid: { color: 'rgba(138, 153, 192, 0.15)' }, ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 } },
-                    y: { stacked: true, grid: { color: 'rgba(138, 153, 192, 0.15)' }, ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => (value / 1000).toFixed(0) + 'k' } }
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: timeUnit,
+                            tooltipFormat: 'yyyy-MM-dd',
+                            displayFormats: {
+                                day: 'MMM d',
+                                month: 'yyyy MMM',
+                                year: 'yyyy'
+                            }
+                        },
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 7
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            callback: value => (value / 1000).toFixed(0) + 'k'
+                        }
+                    }
                 }
-            }
+            },
+            plugins: [{
+                id: 'customLegendPlugin',
+                afterDraw: (chart) => {
+                    const legend = chart.legend;
+                    if (!legend || !legend.legendItems) return;
+
+                    const ctx = chart.ctx;
+                    legend.legendItems.forEach((item, index) => {
+                        if (item.text === 'Total Value') return;
+
+                        const isHighlighted = index === lastHoveredIndex;
+                        if (!isHighlighted) return;
+
+                        const hitBox = legend.legendHitBoxes[index];
+                        if (!hitBox) return;
+
+                        const centerX = hitBox.left + 6;
+                        const centerY = hitBox.top + hitBox.height / 2;
+                        const radius = 7;
+
+                        ctx.save();
+
+                        // 绘制外层发光效果（使用资产颜色）
+                        const assetColor = themeColorsHex[index];
+                        const gradient = ctx.createRadialGradient(centerX, centerY, radius - 1, centerX, centerY, radius + 4);
+                        gradient.addColorStop(0, assetColor);
+                        gradient.addColorStop(0.5, toRgba(assetColor, 0.5));
+                        gradient.addColorStop(1, 'transparent');
+
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, radius + 4, 0, 2 * Math.PI);
+                        ctx.fill();
+
+                        // 绘制实心边框圆圈（使用资产颜色）
+                        ctx.strokeStyle = assetColor;
+                        ctx.lineWidth = 2.5;
+                        ctx.shadowBlur = 8;
+                        ctx.shadowColor = assetColor;
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                        ctx.stroke();
+
+                        ctx.restore();
+                    });
+                }
+            }]
         });
 
-        // ========== 带插值的区域检测逻辑 (无需修改) ==========
+        // ========== 带插值的区域检测逻辑 ==========
         const canvas = document.getElementById('portfolio-value-chart');
         const lerp = (v0, v1, t) => v0 * (1 - t) + v1 * t;
 

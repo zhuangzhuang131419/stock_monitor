@@ -215,7 +215,7 @@ body.modal-open {
     margin-top: 30px;
 }
 
-/* ========== 修改开始：全新图表卡片设计 (统一堆叠图和饼图) ========== */
+/* ========== 全新图表卡片设计 (统一堆叠图和饼图) ========== */
 .value-chart-container,
 .pie-chart-container {
     position: relative;
@@ -282,7 +282,6 @@ body.modal-open {
     position: relative;
     z-index: 1;
 }
-/* ========== 修改结束 ========== */
 
 .summary-footer {
     text-align: center;
