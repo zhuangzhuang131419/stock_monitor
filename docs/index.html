@@ -37,7 +37,12 @@
                     </div>
 
                     <div class="charts-container">
-                        <img id="value-chart-img" alt="资产价值变化图 (加载中...)">
+                        <!-- 修改开始：将图片替换为Canvas容器 -->
+                        <div class="value-chart-container">
+                            <canvas id="portfolio-value-chart"></canvas>
+                        </div>
+                        <!-- 修改结束 -->
+
                         <!-- 替换静态饼图为Canvas -->
                         <div class="pie-chart-container">
                             <canvas id="portfolio-pie-chart"></canvas>

@@ -6,7 +6,8 @@ let fileSha = null;
 let token = '';
 let originalIniLines = [];
 let pendingTabSwitch = null;
-let portfolioPieChart = null; // 新增：饼图实例
+let portfolioPieChart = null; // 饼图实例
+let portfolioValueChart = null; // 新增：堆叠图实例
 
 // --- DOM 元素获取 ---
 const tabButtons = {
@@ -74,7 +75,7 @@ function setupEventListeners() {
     historyModal.backdrop.addEventListener('click', hideHistoryTable);
 }
 
-// ========== 新增：饼图相关函数 ==========
+// ========== 饼图相关函数 ==========
 
 /**
  * 创建高级交互式饼图
@@ -133,14 +134,12 @@ async function createPortfolioPieChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                // 动画配置
                 animation: {
                     animateRotate: true,
                     animateScale: true,
                     duration: 1800,
                     easing: 'easeOutQuart'
                 },
-                // 交互配置
                 interaction: {
                     mode: 'nearest',
                     intersect: true
@@ -162,7 +161,6 @@ async function createPortfolioPieChart() {
                             boxHeight: 12
                         }
                     },
-                    // 自定义工具提示 - 特别处理CASH
                     tooltip: {
                         enabled: true,
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -186,31 +184,26 @@ async function createPortfolioPieChart() {
                             title: function(context) {
                                 return context[0].label;
                             },
-                            // 🔥 修复：特别处理CASH资产
                             label: function(context) {
                                 const symbol = context.label;
                                 const value = context.parsed;
-                                const percentage = (value / totalValue).toFixed(2);
+                                const percentage = (value / totalValue) * 100;
                                 const assetData = assetsInfo[symbol];
 
                                 const lines = [
                                     `价值: $${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                                    `占比: ${percentage * 100}%`
+                                    `占比: ${percentage.toFixed(2)}%`
                                 ];
 
-                                // 🔥 关键修复：CASH资产不显示涨跌幅，其他资产才显示
                                 if (symbol !== 'CASH' && assetData && assetData.returns) {
                                     const returns = assetData.returns;
-                                    lines.push(''); // 空行分隔
+                                    lines.push('');
                                     lines.push('涨跌幅:');
-                                    lines.push(`上一交易日: ${(returns.previous_trading_day).toFixed(2)}%`);
-                                    lines.push(`本周至今: ${(returns.week_to_date).toFixed(2)}%`);
-                                    lines.push(`本月至今: ${(returns.month_to_date).toFixed(2)}%`);
-                                    lines.push(`本年至今: ${(returns.year_to_date).toFixed(2)}%`);
-                                    lines.push(`过去30个交易日: ${(returns.past_30_trading_days).toFixed(2)}%`);
-                                    lines.push(`过去250个交易日: ${(returns.past_250_trading_days).toFixed(2)}%`);
+                                    lines.push(`  1D: ${returns.previous_trading_day.toFixed(2)}%`);
+                                    lines.push(`  WTD: ${returns.week_to_date.toFixed(2)}%`);
+                                    lines.push(`  MTD: ${returns.month_to_date.toFixed(2)}%`);
+                                    lines.push(`  YTD: ${returns.year_to_date.toFixed(2)}%`);
                                 } else if (symbol === 'CASH') {
-                                    // CASH资产可以添加一些说明文字（可选）
                                     lines.push('');
                                     lines.push('💰 现金资产');
                                 }
@@ -238,38 +231,172 @@ async function createPortfolioPieChart() {
  * 生成与主题匹配的色彩数组
  */
 function generateThemeColors(count) {
-    // 青蓝色主题色彩方案
     const baseColors = [
-        '#00f5d4', // 主题青色
-        '#6a82fb', // 主题蓝色
-        '#4ecdc4', // 青绿色
-        '#45b7d1', // 天蓝色
-        '#96ceb4', // 薄荷绿
-        '#ffeaa7', // 柔和黄
-        '#dda0dd', // 淡紫色
-        '#98d8c8', // 浅青色
-        '#f7dc6f', // 金黄色
-        '#bb8fce', // 薰衣草紫
-        '#85c1e9', // 浅蓝色
-        '#f8c471', // 橙黄色
-        '#82e0aa', // 浅绿色
-        '#f1948a', // 珊瑚色
-        '#d7bde2'  // 浅紫色
+        '#00f5d4', '#6a82fb', '#4ecdc4', '#45b7d1', '#96ceb4',
+        '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f', '#bb8fce',
+        '#85c1e9', '#f8c471', '#82e0aa', '#f1948a', '#d7bde2'
     ];
-
-    // 如果需要更多颜色，使用HSL生成
     const colors = [...baseColors];
     while (colors.length < count) {
-        const hue = (colors.length * 137.508) % 360; // 黄金角度分布
-        const saturation = 65 + (colors.length % 3) * 10; // 65-85%
-        const lightness = 60 + (colors.length % 4) * 5;   // 60-75%
+        const hue = (colors.length * 137.508) % 360;
+        const saturation = 65 + (colors.length % 3) * 10;
+        const lightness = 60 + (colors.length % 4) * 5;
         colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
-
     return colors.slice(0, count);
 }
 
-// ========== 原有函数保持不变，但需要在loadInitialSummary中调用饼图创建 ==========
+
+// ========== 新增：历史价值堆叠图 ==========
+/**
+ * 创建交互式历史价值堆叠图
+ */
+async function createPortfolioValueChart() {
+    const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+    const timestamp = new Date().getTime();
+
+    try {
+        const response = await fetch(`${historyUrl}?t=${timestamp}`);
+        if (!response.ok) {
+            throw new Error(`无法加载历史数据文件 (状态: ${response.status})`);
+        }
+        const csvText = await response.text();
+
+        // 1. 解析CSV数据
+        const lines = csvText.trim().split('\n');
+        if (lines.length < 2) throw new Error('历史数据不足');
+
+        const headers = lines.shift().split(',');
+        const dateIndex = headers.indexOf('date');
+        const totalValueIndex = headers.indexOf('total_value');
+
+        const dataRows = lines.reverse(); // 数据按时间升序排列
+        const labels = []; // 日期
+        const assetData = {}; // 存储每个资产的历史价值
+        const totalValueData = [];
+
+        const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
+        assetColumns.forEach(asset => { assetData[asset] = []; });
+
+        const parseValue = (cell) => {
+            if (typeof cell !== 'string') return 0;
+            const match = cell.match(/\(([^|]+)/);
+            return match ? parseFloat(match[1]) : parseFloat(cell) || 0;
+        };
+
+        dataRows.forEach(row => {
+            const values = row.split(',');
+            if (values.length !== headers.length) return;
+
+            labels.push(values[dateIndex]);
+            totalValueData.push(parseFloat(values[totalValueIndex]) || 0);
+
+            assetColumns.forEach(asset => {
+                const assetIndex = headers.indexOf(asset);
+                assetData[asset].push(parseValue(values[assetIndex]));
+            });
+        });
+
+        // 2. 创建Chart.js数据集
+        const themeColors = generateThemeColors(assetColumns.length);
+        const datasets = assetColumns.map((asset, index) => ({
+            label: asset,
+            data: assetData[asset],
+            backgroundColor: themeColors[index] + '80', // 添加透明度
+            borderColor: themeColors[index],
+            fill: 'origin',
+            stack: 'combined',
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            tension: 0.4,
+        }));
+
+        datasets.push({
+            label: 'Total Value',
+            data: totalValueData,
+            borderColor: 'rgba(255, 255, 255, 0.9)',
+            backgroundColor: 'transparent',
+            fill: false,
+            type: 'line',
+            borderWidth: 2.5,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            tension: 0.4,
+            order: -1,
+        });
+
+        // 3. 渲染图表
+        const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
+        if (portfolioValueChart) {
+            portfolioValueChart.destroy();
+        }
+
+        portfolioValueChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '资产价值历史趋势',
+                        color: '#e0e5f3',
+                        font: { size: 16, family: 'Poppins' },
+                        padding: { bottom: 20 }
+                    },
+                    legend: { display: false }, // 标签太多，暂时禁用图例
+                    tooltip: {
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        cornerRadius: 8,
+                        padding: 12,
+                        titleFont: { family: 'Poppins', weight: 'bold' },
+                        bodyFont: { family: 'Poppins' },
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'day',
+                            tooltipFormat: 'MMM dd, yyyy',
+                            displayFormats: { day: 'MMM dd' }
+                        },
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45 },
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            callback: value => '$' + (value / 1000).toFixed(0) + 'k'
+                        }
+                    }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('创建历史价值图表失败:', error);
+        const canvas = document.getElementById('portfolio-value-chart');
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ff4757';
+        ctx.font = '16px Poppins';
+        ctx.textAlign = 'center';
+        ctx.fillText('价值图加载失败', canvas.width / 2, canvas.height / 2);
+    }
+}
+
+
+// ========== 页面加载与数据处理 ==========
 
 async function showHistoryTable() {
     document.body.classList.add('modal-open');
@@ -618,9 +745,6 @@ function getRepoInfoFromURL() {
     return { owner: 'YOUR_USERNAME', repo: 'YOUR_REPONAME' };
 }
 
-/**
- * 异步获取并展示投资回报率、盈利和增值数据
- */
 async function loadReturnsData() {
     const returnsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_return.json`;
     const timestamp = new Date().getTime();
@@ -647,13 +771,11 @@ async function loadReturnsData() {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'return-item';
 
-            // --- 周期标签 (例如 "本周至今") ---
             const periodLabel = document.createElement('span');
             periodLabel.className = 'return-label';
             periodLabel.textContent = period;
             itemDiv.appendChild(periodLabel);
 
-            // --- 创建带颜色数值的辅助函数 ---
             const createValueSpan = (value, isPercent) => {
                 const span = document.createElement('span');
                 const sign = value > 0 ? '+' : '';
@@ -665,21 +787,15 @@ async function loadReturnsData() {
                 }
                 span.textContent = text;
 
-                // 添加颜色类
-                if (value > 0) {
-                    span.classList.add('positive');
-                } else if (value < 0) {
-                    span.classList.add('negative');
-                }
+                if (value > 0) span.classList.add('positive');
+                else if (value < 0) span.classList.add('negative');
                 return span;
             };
 
-            // --- 1. 收益率 (Return) ---
             const returnValueSpan = createValueSpan(returnValue, true);
-            returnValueSpan.classList.add('return-value'); // 使用这个类来定义大号字体
+            returnValueSpan.classList.add('return-value');
             itemDiv.appendChild(returnValueSpan);
 
-            // --- 2. 盈利 (Profit) ---
             const profitDiv = document.createElement('div');
             profitDiv.className = 'detail-line';
             const profitLabel = document.createElement('span');
@@ -690,7 +806,6 @@ async function loadReturnsData() {
             profitDiv.append(profitLabel, profitValueSpan);
             itemDiv.appendChild(profitDiv);
 
-            // --- 3. 增值 (Growth) ---
             const growthDiv = document.createElement('div');
             growthDiv.className = 'detail-line';
             const growthLabel = document.createElement('span');
@@ -710,25 +825,16 @@ async function loadReturnsData() {
     }
 }
 
-// ========== 修改loadInitialSummary函数，添加饼图创建 ==========
+// ========== 修改：更新页面加载逻辑 ==========
 async function loadInitialSummary() {
     const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
-    const valueChartUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_value_chart.png`;
-
-    const valueChartImg = document.getElementById('value-chart-img');
     const lastUpdatedTime = document.getElementById('last-updated-time');
-
-    valueChartImg.style.display = 'none';
-    valueChartImg.onload = () => { valueChartImg.style.display = 'block'; };
-
     const timestamp = new Date().getTime();
-    valueChartImg.src = `${valueChartUrl}?t=${timestamp}`;
 
-    // 加载收益率数据
+    // 加载所有图表和数据
     loadReturnsData();
-
-    // 创建交互式饼图
     createPortfolioPieChart();
+    createPortfolioValueChart(); // 新增调用
 
     try {
         const response = await fetch(`${csvUrl}?t=${timestamp}`);

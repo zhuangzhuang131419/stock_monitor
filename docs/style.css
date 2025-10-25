@@ -217,22 +217,8 @@ body.modal-open {
     margin-top: 30px;
 }
 
-.charts-container img {
-    width: 100%;
-    height: auto;
-    border: 1px solid var(--container-border);
-    border-radius: 16px;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    background-color: #fff;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.charts-container img:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 15px 35px rgba(0,0,0,0.25);
-}
-
-/* ========== 全新饼图设计 ========== */
+/* ========== 修改开始：全新图表卡片设计 (统一堆叠图和饼图) ========== */
+.value-chart-container,
 .pie-chart-container {
     position: relative;
     background: linear-gradient(135deg,
@@ -249,6 +235,7 @@ body.modal-open {
     overflow: hidden;
 }
 
+.value-chart-container::before,
 .pie-chart-container::before {
     content: '';
     position: absolute;
@@ -264,11 +251,13 @@ body.modal-open {
     z-index: -1;
 }
 
+.value-chart-container:hover,
 .pie-chart-container:hover {
     transform: translateY(-5px);
     box-shadow: 0 15px 35px rgba(0, 245, 212, 0.1);
 }
 
+.value-chart-container::after,
 .pie-chart-container::after {
     content: '';
     position: absolute;
@@ -283,16 +272,19 @@ body.modal-open {
     transition: opacity 0.3s ease;
 }
 
+.value-chart-container:hover::after,
 .pie-chart-container:hover::after {
     opacity: 0.3;
 }
 
+#portfolio-value-chart,
 #portfolio-pie-chart {
     width: 100% !important;
     height: 350px !important;
     position: relative;
     z-index: 1;
 }
+/* ========== 修改结束 ========== */
 
 .summary-footer {
     text-align: center;
