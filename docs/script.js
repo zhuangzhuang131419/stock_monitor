@@ -290,7 +290,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (V22 - 高亮回归 & 图例交互终极修复版)
+ * 创建交互式历史价值堆叠图 (V20 修正版 - 移除区域高亮 & 修复X轴)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -305,14 +305,23 @@ async function createPortfolioValueChart() {
         if (lines.length < 2) throw new Error('历史数据不足');
 
         const headers = lines.shift().split(',');
-        const dataRows = lines.reverse(); // 确保数据按时间正序排列
+        const dataRows = lines.reverse();
 
         const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
 
-        // --- 关键改动 1.1：准备原始颜色和“变暗”后的颜色 ---
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
-        const dimmedColorsRgba = themeColorsHex.map(color => toRgba(color, 0.25)); // 用于“压暗”非选中项
+
+        const highlightedColorsRgba = originalColorsRgba.map(rgbaColor => {
+            const parts = rgbaColor.match(/[\d.]+/g);
+            if (!parts) return 'rgba(255,255,255,0.8)';
+            let [r, g, b] = parts.map(Number);
+            const factor = 1.25;
+            r = Math.min(255, Math.floor(r * factor));
+            g = Math.min(255, Math.floor(g * factor));
+            b = Math.min(255, Math.floor(b * factor));
+            return `rgba(${r}, ${g}, ${b}, 1)`;
+        });
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
@@ -347,7 +356,7 @@ async function createPortfolioValueChart() {
             const values = row.split(',');
             if (values.length !== headers.length) return;
             const dateStr = values[headers.indexOf('date')];
-            if (!dateStr) return;
+            if (!dateStr) return; // 跳过没有日期的行
 
             labels.push(dateStr);
             totalValueData.push(parseFloat(values[headers.indexOf('total_value')]) || 0);
@@ -364,26 +373,30 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        let hoveredLegendIndex = null;
+        let lastHoveredIndex = null;
 
-        // --- 关键改动 1.2：统一处理高亮状态的函数 ---
-        const updateHighlight = (targetIndex) => {
-            const chart = portfolioValueChart;
-            if (!chart) return;
-
-            chart.data.datasets.forEach((dataset, index) => {
-                if (dataset.stack !== 'combined') return;
-
-                // 如果有目标，则将非目标区域变暗；如果没有目标（鼠标离开），则全部恢复
-                if (targetIndex !== null && index !== targetIndex) {
-                    dataset.backgroundColor = dimmedColorsRgba[index];
-                } else {
-                    dataset.backgroundColor = originalColorsRgba[index];
+        const highlightDataset = (targetIndex) => {
+            if (targetIndex === lastHoveredIndex) return;
+            const chartDatasets = portfolioValueChart.data.datasets;
+            if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
+                const prevDataset = chartDatasets[lastHoveredIndex];
+                if (prevDataset && prevDataset.stack === 'combined') {
+                    prevDataset.backgroundColor = originalColorsRgba[lastHoveredIndex];
                 }
-            });
+            }
+            if (targetIndex !== null && targetIndex > -1) {
+                const targetDataset = chartDatasets[targetIndex];
+                if (targetDataset && targetDataset.stack === 'combined') {
+                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
+                }
+            }
+            lastHoveredIndex = targetIndex;
+            portfolioValueChart.update('none');
         };
 
-        // 动态计算X轴的时间单位
+        const resetHighlight = () => highlightDataset(-1);
+
+        // --- 关键改动 2：动态计算X轴的时间单位 ---
         let timeUnit = 'day';
         if (labels.length > 1) {
             const firstDate = new Date(labels[0]);
@@ -400,11 +413,7 @@ async function createPortfolioValueChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                // --- 关键改动 2.1：设置全局平滑动画，移除可能冲突的 transitions 设置 ---
-                animation: {
-                    duration: 300,
-                    easing: 'easeOutQuad'
-                },
+                animation: { duration: 0 },
                 interaction: {
                     mode: 'index',
                     intersect: false,
@@ -412,36 +421,10 @@ async function createPortfolioValueChart() {
                 plugins: {
                     title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
                     legend: {
-                        display: true,
-                        position: 'bottom',
-                        // --- 关键改动 2.2：确保 onHover/onLeave 能触发图表更新 ---
-                        onHover: (event, legendItem, legend) => {
-                            legend.chart.canvas.style.cursor = 'pointer';
-                            hoveredLegendIndex = legendItem.datasetIndex;
-                            updateHighlight(hoveredLegendIndex);
-                            legend.chart.update(); // 触发图表重绘以应用所有效果
-                        },
-                        onLeave: (event, legendItem, legend) => {
-                            legend.chart.canvas.style.cursor = 'default';
-                            hoveredLegendIndex = null;
-                            updateHighlight(null);
-                            legend.chart.update(); // 触发图表重绘以恢复
-                        },
-                        labels: {
-                            padding: 15,
-                            usePointStyle: true,
-                            pointStyle: 'circle',
-                            // --- 关键改动 2.3：这些动态样式现在可以正确工作了 ---
-                            font: (context) => ({
-                                family: 'Poppins',
-                                size: context.datasetIndex === hoveredLegendIndex ? 12.5 : 11,
-                                weight: context.datasetIndex === hoveredLegendIndex ? 'bold' : 'normal',
-                            }),
-                            color: '#e0e5f3',
-                            boxWidth: (context) => context.datasetIndex === hoveredLegendIndex ? 14 : 10,
-                            boxHeight: (context) => context.datasetIndex === hoveredLegendIndex ? 14 : 10,
-                            filter: (item) => item.text !== 'Total Value',
-                        },
+                        display: true, position: 'bottom',
+                        labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
+                        onHover: (event, legendItem) => highlightDataset(legendItem.datasetIndex),
+                        onLeave: resetHighlight,
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3',
@@ -460,12 +443,17 @@ async function createPortfolioValueChart() {
                     },
                 },
                 scales: {
+                     // --- 关键改动 2：应用动态时间单位和更合理的格式 ---
                      x: {
                          type: 'time',
                          time: {
-                             unit: timeUnit,
+                             unit: timeUnit, // 应用动态计算出的时间单位
                              tooltipFormat: 'yyyy-MM-dd',
-                             displayFormats: { day: 'MMM d', month: 'yyyy MMM', year: 'yyyy' }
+                             displayFormats: {
+                                 day: 'MMM d',
+                                 month: 'yyyy MMM',
+                                 year: 'yyyy'
+                             }
                          },
                          grid: { color: 'rgba(138, 153, 192, 0.15)' },
                          ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }
@@ -478,6 +466,8 @@ async function createPortfolioValueChart() {
                 }
             }
         });
+
+        // --- 关键改动 1：已删除所有 canvas.addEventListener 代码 ---
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
