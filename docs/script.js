@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 - 增强版双向高亮
+ * 创建交互式历史价值堆叠图 (V20 修正版 - 移除区域高亮 & 修复X轴)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -352,7 +352,7 @@ async function createPortfolioValueChart() {
             const values = row.split(',');
             if (values.length !== headers.length) return;
             const dateStr = values[headers.indexOf('date')];
-            if (!dateStr) return;
+            if (!dateStr) return; // 跳过没有日期的行
 
             labels.push(dateStr);
             totalValueData.push(parseFloat(values[headers.indexOf('total_value')]) || 0);
@@ -370,7 +370,6 @@ async function createPortfolioValueChart() {
         if (portfolioValueChart) portfolioValueChart.destroy();
 
         let lastHoveredIndex = null;
-        let isHoveringOnChart = false;
 
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
@@ -391,40 +390,9 @@ async function createPortfolioValueChart() {
             portfolioValueChart.update('none');
         };
 
-        const resetHighlight = () => {
-            highlightDataset(-1);
-            resetLegendHighlight();
-        };
+        const resetHighlight = () => highlightDataset(-1);
 
-        // 图例高亮相关函数
-        const highlightLegendItem = (datasetIndex) => {
-            // 查找Chart.js生成的图例元素
-            const legend = portfolioValueChart.legend;
-            if (legend && legend.legendItems) {
-                legend.legendItems.forEach((item, index) => {
-                    if (index === datasetIndex) {
-                        item.fontColor = '#ffffff';
-                        item.fillStyle = highlightedColorsRgba[index] || item.fillStyle;
-                    } else {
-                        item.fontColor = 'rgba(224, 229, 243, 0.6)';
-                    }
-                });
-                portfolioValueChart.update('none');
-            }
-        };
-
-        const resetLegendHighlight = () => {
-            const legend = portfolioValueChart.legend;
-            if (legend && legend.legendItems) {
-                legend.legendItems.forEach((item, index) => {
-                    item.fontColor = '#e0e5f3';
-                    item.fillStyle = originalColorsRgba[index] || item.fillStyle;
-                });
-                portfolioValueChart.update('none');
-            }
-        };
-
-        // 动态计算X轴的时间单位
+        // --- 关键改动 2：动态计算X轴的时间单位 ---
         let timeUnit = 'day';
         if (labels.length > 1) {
             const firstDate = new Date(labels[0]);
@@ -446,67 +414,18 @@ async function createPortfolioValueChart() {
                     mode: 'index',
                     intersect: false,
                 },
-                // 关键新增：onHover事件处理
-                onHover: (event, activeElements) => {
-                    isHoveringOnChart = true;
-
-                    if (activeElements.length > 0) {
-                        const activeElement = activeElements[0];
-                        const datasetIndex = activeElement.datasetIndex;
-
-                        // 只对堆叠区域（非Total Value线）进行高亮
-                        if (datasets[datasetIndex] && datasets[datasetIndex].stack === 'combined') {
-                            highlightDataset(datasetIndex);
-                            highlightLegendItem(datasetIndex);
-                        }
-                    } else {
-                        // 鼠标不在任何元素上时重置高亮
-                        resetHighlight();
-                    }
-                },
                 plugins: {
-                    title: {
-                        display: true,
-                        text: '资产价值历史趋势',
-                        color: '#e0e5f3',
-                        font: { size: 16, family: 'Poppins' },
-                        padding: { bottom: 20 }
-                    },
+                    title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
                     legend: {
-                        display: true,
-                        position: 'bottom',
-                        labels: {
-                            padding: 15,
-                            usePointStyle: true,
-                            pointStyle: 'circle',
-                            font: { family: 'Poppins', size: 11 },
-                            color: '#e0e5f3',
-                            boxWidth: 10,
-                            boxHeight: 10,
-                            filter: (item) => item.text !== 'Total Value'
-                        },
-                        onHover: (event, legendItem) => {
-                            if (!isHoveringOnChart) {
-                                highlightDataset(legendItem.datasetIndex);
-                                highlightLegendItem(legendItem.datasetIndex);
-                            }
-                        },
-                        onLeave: (event, legendItem) => {
-                            if (!isHoveringOnChart) {
-                                resetHighlight();
-                            }
-                        },
+                        display: true, position: 'bottom',
+                        labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
+                        onHover: (event, legendItem) => highlightDataset(legendItem.datasetIndex),
+                        onLeave: resetHighlight,
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
-                        titleColor: '#00f5d4',
-                        bodyColor: '#e0e5f3',
-                        borderColor: '#00f5d4',
-                        borderWidth: 1,
-                        cornerRadius: 8,
-                        padding: 12,
-                        titleFont: { family: 'Poppins', weight: 'bold' },
-                        bodyFont: { family: 'Poppins' },
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4', borderWidth: 1, cornerRadius: 8, padding: 12,
+                        titleFont: { family: 'Poppins', weight: 'bold' }, bodyFont: { family: 'Poppins' },
                         filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
                         callbacks: {
                              title: (context) => context[0].label,
@@ -520,10 +439,11 @@ async function createPortfolioValueChart() {
                     },
                 },
                 scales: {
+                     // --- 关键改动 2：应用动态时间单位和更合理的格式 ---
                      x: {
                          type: 'time',
                          time: {
-                             unit: timeUnit,
+                             unit: timeUnit, // 应用动态计算出的时间单位
                              tooltipFormat: 'yyyy-MM-dd',
                              displayFormats: {
                                  day: 'MMM d',
@@ -543,20 +463,14 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // 监听鼠标离开图表区域的事件
-        const canvas = document.getElementById('portfolio-value-chart');
-        canvas.addEventListener('mouseleave', () => {
-            isHoveringOnChart = false;
-            resetHighlight();
-        });
+        // --- 关键改动 1：已删除所有 canvas.addEventListener 代码 ---
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
         const canvas = document.getElementById('portfolio-value-chart');
         if (canvas) {
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ff4757';
-            ctx.font = '16px Poppins';
+            ctx.fillStyle = '#ff4757'; ctx.font = '16px Poppins';
             ctx.textAlign = 'center';
             ctx.fillText('价值图加载失败，请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
         }
