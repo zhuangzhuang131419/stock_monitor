@@ -292,7 +292,7 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v4 - 终极性能优化版)
+ * 创建交互式历史价值堆叠图 (修复版 - 解决联动高亮问题)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -339,13 +339,12 @@ async function createPortfolioValueChart() {
 
         const themeColors = generateThemeColors(assetColumns.length);
 
-        // --- 核心修正 1：预先计算并存储所有半透明背景色 ---
+        // 预先计算并存储所有半透明背景色
         const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            // --- 核心修正 2：直接使用预先计算好的颜色 ---
             backgroundColor: backgroundColorsRgba[index],
             borderColor: themeColors[index],
             fill: 'origin',
@@ -405,9 +404,13 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // --- 核心修正 3：事件处理逻辑大幅简化，只从数组取色 ---
-                        onHover: (event, legendItem, legend) => {
+                        // 修复后的事件处理逻辑
+                        onHover: function(event, legendItem, legend) {
                             const chart = legend.chart;
+
+                            // 确保legendItem存在且有效
+                            if (!legendItem || legendItem.hidden) return;
+
                             const hoveredDatasetIndex = legendItem.datasetIndex;
                             const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
@@ -417,21 +420,30 @@ async function createPortfolioValueChart() {
                                 if (index !== hoveredDatasetIndex) {
                                     dataset.backgroundColor = dimmedColor;
                                 } else {
-                                    // 直接从预计算的数组中恢复高亮颜色
-                                    dataset.backgroundColor = backgroundColorsRgba[index];
+                                    // 确保索引在有效范围内
+                                    if (index < backgroundColorsRgba.length) {
+                                        dataset.backgroundColor = backgroundColorsRgba[index];
+                                    }
                                 }
                             });
-                            chart.update();
+
+                            // 使用update('none')避免动画，提高性能
+                            chart.update('none');
                         },
-                        onLeave: (event, legendItem, legend) => {
+
+                        onLeave: function(event, legendItem, legend) {
                             const chart = legend.chart;
+
                             chart.data.datasets.forEach((dataset, index) => {
                                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    // 直接从预计算的数组中恢复所有原始颜色
-                                    dataset.backgroundColor = backgroundColorsRgba[index];
+                                    // 确保索引在有效范围内
+                                    if (index < backgroundColorsRgba.length) {
+                                        dataset.backgroundColor = backgroundColorsRgba[index];
+                                    }
                                 }
                             });
-                            chart.update();
+
+                            chart.update('none');
                         }
                     },
                     tooltip: {
@@ -452,14 +464,47 @@ async function createPortfolioValueChart() {
                 scales: {
                     x: {
                         type: 'time',
-                        time: { tooltipFormat: 'MMM dd, yyyy', displayFormats: { day: 'MMM dd', week: 'MMM dd', month: 'MMM yyyy', year: 'yyyy' }},
+                        time: {
+                            tooltipFormat: 'MMM dd, yyyy',
+                            displayFormats: {
+                                day: 'MMM dd',
+                                week: 'MMM dd',
+                                month: 'MMM yyyy',
+                                year: 'yyyy'
+                            }
+                        },
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 10 },
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 10
+                        },
                     },
                     y: {
                         stacked: true,
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k' }
+                        ticks: {
+                            color: '#8a99c0',
+                            font: { family: 'Poppins' },
+                            callback: value => '$' + (value / 1000).toFixed(0) + 'k'
+                        }
+                    }
+                },
+                // 添加全局鼠标事件作为备用恢复机制
+                onHover: function(event, elements, chart) {
+                    // 当鼠标完全离开图表区域时恢复所有颜色
+                    if (elements.length === 0) {
+                        chart.data.datasets.forEach((dataset, index) => {
+                            if (dataset.label !== 'Total Value' && !dataset.hidden) {
+                                if (index < backgroundColorsRgba.length) {
+                                    dataset.backgroundColor = backgroundColorsRgba[index];
+                                }
+                            }
+                        });
+                        chart.update('none');
                     }
                 }
             }
