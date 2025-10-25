@@ -292,13 +292,15 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v7 - 最终防崩溃修复版)
+ * 创建交互式历史价值堆叠图 (v8 - 诊断版)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
     try {
+        // ... (这部分数据加载和图表配置的代码与 V7 完全相同，因此省略以保持简洁) ...
+        // ... (The data loading and chart configuration part is identical to V7, so it's omitted for brevity) ...
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
         if (!response.ok) {
             throw new Error(`无法加载历史数据文件 (状态: ${response.status})`);
@@ -434,13 +436,14 @@ async function createPortfolioValueChart() {
             }
         });
 
+
+        // --- 从这里开始是 V8 诊断版的核心 ---
         let lastHoveredLegendIndex = null;
         const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
         const restoreLegendColors = () => {
             portfolioValueChart.data.datasets.forEach((dataset, index) => {
                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                    // 确保 backgroundColorsRgba[index] 存在
                     if(backgroundColorsRgba[index]) {
                        dataset.backgroundColor = backgroundColorsRgba[index];
                     }
@@ -452,8 +455,9 @@ async function createPortfolioValueChart() {
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const legend = portfolioValueChart.legend;
 
-            // --- 核心修复：在这里添加安全检查 ---
-            // 必须先确认 legend 和 legend.hitboxes 都已准备就绪，否则直接退出
+            // --- 诊断点 1: 报告鼠标的实时坐标 ---
+            console.log(`--- Mouse Move --- Coords: (x: ${e.offsetX}, y: ${e.offsetY})`);
+
             if (!legend || !legend.hitboxes || legend.hitboxes.length === 0) {
                 return;
             }
@@ -461,13 +465,27 @@ async function createPortfolioValueChart() {
             const legendItems = legend.legendItems;
             let hoveredIndex = -1;
 
-            // 现在可以安全地遍历 hitboxes
+            // --- 诊断点 2: 报告正在检查的图例项范围 ---
+            // 为了避免信息刷屏，只在鼠标进入图例的大致垂直区域时才打印
+            if (e.offsetY > legend.top - 10 && e.offsetY < legend.bottom + 10) {
+                console.log(`[DEBUG] Mouse is near legend. Checking ${legend.hitboxes.length} hitboxes...`);
+                for (let i = 0; i < legend.hitboxes.length; i++) {
+                    const hitbox = legend.hitboxes[i];
+                    if (hitbox) {
+                        console.log(`  - Hitbox #${i} for '${legendItems[i]?.text}': {left: ${hitbox.left.toFixed(0)}, top: ${hitbox.top.toFixed(0)}, width: ${hitbox.width.toFixed(0)}, height: ${hitbox.height.toFixed(0)}}`);
+                    }
+                }
+            }
+
+            // 核心命中检测逻辑
             for (let i = 0; i < legend.hitboxes.length; i++) {
                 const hitbox = legend.hitboxes[i];
-                // 额外检查 hitbox 是否有效
                 if (hitbox && e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
                     e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height)
                 {
+                    // --- 诊断点 3: 报告成功命中 ---
+                    console.log(`%c[SUCCESS] HIT on hitbox #${i} ('${legendItems[i]?.text}')!`, 'color: #00f5d4; font-weight: bold;');
+
                     if(legendItems[i] && legendItems[i].text !== 'Total Value') {
                         hoveredIndex = legendItems[i].datasetIndex;
                         break;
@@ -479,6 +497,8 @@ async function createPortfolioValueChart() {
                 return;
             }
 
+            // --- 诊断点 4: 报告状态变化，即将更新图表 ---
+            console.log(`%c[STATE] State changed! New hoveredIndex: ${hoveredIndex}. Updating chart.`, 'color: #ffc107;');
             lastHoveredLegendIndex = hoveredIndex;
 
             if (hoveredIndex !== -1) {
@@ -488,7 +508,6 @@ async function createPortfolioValueChart() {
                     if (index !== hoveredIndex) {
                         dataset.backgroundColor = dimmedColor;
                     } else {
-                        // 确保 backgroundColorsRgba[index] 存在
                         if(backgroundColorsRgba[index]) {
                             dataset.backgroundColor = backgroundColorsRgba[index];
                         }
