@@ -292,9 +292,10 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (修复版 - 解决联动高亮问题)
+ * 创建交互式历史价值堆叠图 (v5 - 调试专用版)
  */
 async function createPortfolioValueChart() {
+    console.log('[DEBUG] Chart Function Started: createPortfolioValueChart');
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
@@ -339,8 +340,11 @@ async function createPortfolioValueChart() {
 
         const themeColors = generateThemeColors(assetColumns.length);
 
-        // 预先计算并存储所有半透明背景色
+        // --- 预计算颜色 ---
+        console.log('[DEBUG] Pre-calculating RGBA colors...');
         const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
+        console.log('[DEBUG] Pre-calculated Colors:', backgroundColorsRgba);
+
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
@@ -374,6 +378,8 @@ async function createPortfolioValueChart() {
             portfolioValueChart.destroy();
         }
 
+        console.log('[DEBUG] Creating new Chart instance...');
+
         portfolioValueChart = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
@@ -404,13 +410,12 @@ async function createPortfolioValueChart() {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // 修复后的事件处理逻辑
+                        // --- 调试核心：在事件中打印日志 ---
                         onHover: function(event, legendItem, legend) {
+                            console.log('--- [DEBUG] Legend onHover Event Fired! ---');
+                            console.log('[DEBUG] Hovered Item:', legendItem);
+
                             const chart = legend.chart;
-
-                            // 确保legendItem存在且有效
-                            if (!legendItem || legendItem.hidden) return;
-
                             const hoveredDatasetIndex = legendItem.datasetIndex;
                             const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
@@ -420,30 +425,23 @@ async function createPortfolioValueChart() {
                                 if (index !== hoveredDatasetIndex) {
                                     dataset.backgroundColor = dimmedColor;
                                 } else {
-                                    // 确保索引在有效范围内
-                                    if (index < backgroundColorsRgba.length) {
-                                        dataset.backgroundColor = backgroundColorsRgba[index];
-                                    }
+                                    dataset.backgroundColor = backgroundColorsRgba[index];
+                                    console.log(`[DEBUG] Highlighting index ${index} with color ${backgroundColorsRgba[index]}`);
                                 }
                             });
-
-                            // 使用update('none')避免动画，提高性能
-                            chart.update('none');
+                            chart.update();
+                            console.log('[DEBUG] Chart updated on hover.');
                         },
-
                         onLeave: function(event, legendItem, legend) {
+                            console.log('--- [DEBUG] Legend onLeave Event Fired! ---');
                             const chart = legend.chart;
-
                             chart.data.datasets.forEach((dataset, index) => {
                                 if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    // 确保索引在有效范围内
-                                    if (index < backgroundColorsRgba.length) {
-                                        dataset.backgroundColor = backgroundColorsRgba[index];
-                                    }
+                                    dataset.backgroundColor = backgroundColorsRgba[index];
                                 }
                             });
-
-                            chart.update('none');
+                            chart.update();
+                            console.log('[DEBUG] Chart restored on leave.');
                         }
                     },
                     tooltip: {
@@ -464,51 +462,19 @@ async function createPortfolioValueChart() {
                 scales: {
                     x: {
                         type: 'time',
-                        time: {
-                            tooltipFormat: 'MMM dd, yyyy',
-                            displayFormats: {
-                                day: 'MMM dd',
-                                week: 'MMM dd',
-                                month: 'MMM yyyy',
-                                year: 'yyyy'
-                            }
-                        },
+                        time: { tooltipFormat: 'MMM dd, yyyy', displayFormats: { day: 'MMM dd', week: 'MMM dd', month: 'MMM yyyy', year: 'yyyy' }},
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: {
-                            color: '#8a99c0',
-                            font: { family: 'Poppins' },
-                            maxRotation: 45,
-                            minRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: 10
-                        },
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 10 },
                     },
                     y: {
                         stacked: true,
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: {
-                            color: '#8a99c0',
-                            font: { family: 'Poppins' },
-                            callback: value => '$' + (value / 1000).toFixed(0) + 'k'
-                        }
-                    }
-                },
-                // 添加全局鼠标事件作为备用恢复机制
-                onHover: function(event, elements, chart) {
-                    // 当鼠标完全离开图表区域时恢复所有颜色
-                    if (elements.length === 0) {
-                        chart.data.datasets.forEach((dataset, index) => {
-                            if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                if (index < backgroundColorsRgba.length) {
-                                    dataset.backgroundColor = backgroundColorsRgba[index];
-                                }
-                            }
-                        });
-                        chart.update('none');
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k' }
                     }
                 }
             }
         });
+        console.log('[DEBUG] Chart instance created successfully.');
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
