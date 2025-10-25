@@ -463,7 +463,38 @@ async function createPortfolioValueChart() {
             }
         });
 
-        // --- 关键改动 1：已删除所有 canvas.addEventListener 代码 ---
+        const canvas = document.getElementById('portfolio-value-chart');
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (!portfolioValueChart) return;
+
+            const elements = portfolioValueChart.getElementsAtEventForMode(
+                event,
+                'nearest',
+                { intersect: true },
+                false
+            );
+
+            if (elements.length > 0) {
+                const element = elements[0];
+                const datasetIndex = element.datasetIndex;
+                const dataset = portfolioValueChart.data.datasets[datasetIndex];
+
+                if (dataset && dataset.stack === 'combined') {
+                    highlightDataset(datasetIndex);
+                    canvas.style.cursor = 'pointer';
+                    return;
+                }
+            }
+
+            canvas.style.cursor = 'default';
+            resetHighlight();
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            canvas.style.cursor = 'default';
+            resetHighlight();
+        });
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
