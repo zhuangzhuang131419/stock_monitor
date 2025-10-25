@@ -287,12 +287,17 @@ function toRgba(hex, alpha = 1) {
 
 /**
  * 创建交互式历史价值堆叠图
- * [优化] 1. 高亮效果升级为动态"光泽扫过"动画
- * [优化] 2. 图例高亮时使用与资产相同的颜色+发光效果
+ * [优化] 1. 删除标题，保持简约
+ * [优化] 2. 左上角齿轮按钮，展开设置面板
+ * [优化] 3. 支持切换简化/详细模式，本地缓存
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
+
+    // --- 从 localStorage 读取用户偏好（默认详细模式）---
+    const STORAGE_KEY = 'portfolio_chart_settings';
+    let chartSettings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"simpleTooltip": false}');
 
     // --- 动画状态变量 ---
     let shimmerAnimationId = null;
@@ -443,11 +448,7 @@ async function createPortfolioValueChart() {
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     title: {
-                        display: true,
-                        text: '资产价值历史趋势',
-                        color: '#e0e5f3',
-                        font: { size: 16, family: 'Poppins' },
-                        padding: { bottom: 20 }
+                        display: false  // ✅ 删除标题
                     },
                     legend: {
                         display: true,
@@ -507,7 +508,14 @@ async function createPortfolioValueChart() {
                         padding: 12,
                         titleFont: { family: 'Poppins', weight: 'bold' },
                         bodyFont: { family: 'Poppins' },
-                        filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
+                        // ✅ 根据设置动态过滤
+                        filter: (item) => {
+                            if (chartSettings.simpleTooltip) {
+                                return item.dataset.label === 'Total Value';
+                            } else {
+                                return (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value';
+                            }
+                        },
                         callbacks: {
                             title: (context) => context[0].label,
                             label: (context) => {
@@ -573,7 +581,6 @@ async function createPortfolioValueChart() {
 
                         ctx.save();
 
-                        // 绘制外层发光效果（使用资产颜色）
                         const assetColor = themeColorsHex[index];
                         const gradient = ctx.createRadialGradient(centerX, centerY, radius - 1, centerX, centerY, radius + 4);
                         gradient.addColorStop(0, assetColor);
@@ -585,7 +592,6 @@ async function createPortfolioValueChart() {
                         ctx.arc(centerX, centerY, radius + 4, 0, 2 * Math.PI);
                         ctx.fill();
 
-                        // 绘制实心边框圆圈（使用资产颜色）
                         ctx.strokeStyle = assetColor;
                         ctx.lineWidth = 2.5;
                         ctx.shadowBlur = 8;
@@ -599,6 +605,9 @@ async function createPortfolioValueChart() {
                 }
             }]
         });
+
+        // ========== 创建设置按钮和面板 ==========
+        createChartSettingsUI(chartSettings, STORAGE_KEY);
 
         // ========== 带插值的区域检测逻辑 ==========
         const canvas = document.getElementById('portfolio-value-chart');
@@ -680,6 +689,109 @@ async function createPortfolioValueChart() {
             ctx.fillText('价值图加载失败，请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
         }
     }
+}
+
+/**
+ * 创建图表设置UI（齿轮按钮+面板）
+ */
+function createChartSettingsUI(chartSettings, storageKey) {
+    const container = document.querySelector('.value-chart-container');
+
+    // 移除已存在的设置UI
+    const existingUI = container.querySelector('.chart-settings-wrapper');
+    if (existingUI) existingUI.remove();
+
+    // 创建设置UI包装器
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chart-settings-wrapper';
+
+    // 创建齿轮按钮
+    const gearButton = document.createElement('button');
+    gearButton.className = 'chart-settings-gear';
+    gearButton.innerHTML = '<i class="fas fa-cog"></i>';
+    gearButton.title = '图表设置';
+
+    // 创建设置面板
+    const panel = document.createElement('div');
+    panel.className = 'chart-settings-panel';
+    panel.innerHTML = `
+        <div class="settings-panel-header">
+            <span>图表设置</span>
+            <button class="settings-close-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="settings-panel-body">
+            <label class="settings-option">
+                <input type="checkbox" id="simple-tooltip-checkbox" ${chartSettings.simpleTooltip ? 'checked' : ''}>
+                <span class="settings-option-label">
+                    <strong>简化提示框</strong>
+                    <small>仅显示日期和总价值</small>
+                </span>
+            </label>
+            <!-- 未来可以在这里添加更多设置项 -->
+        </div>
+    `;
+
+    wrapper.appendChild(gearButton);
+    wrapper.appendChild(panel);
+    container.appendChild(wrapper);
+
+    // 事件监听
+    let isPanelOpen = false;
+
+    gearButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        isPanelOpen = !isPanelOpen;
+        panel.classList.toggle('active', isPanelOpen);
+        gearButton.classList.toggle('active', isPanelOpen);
+    });
+
+    panel.querySelector('.settings-close-btn').addEventListener('click', () => {
+        isPanelOpen = false;
+        panel.classList.remove('active');
+        gearButton.classList.remove('active');
+    });
+
+    // 点击外部关闭面板
+    document.addEventListener('click', (e) => {
+        if (isPanelOpen && !wrapper.contains(e.target)) {
+            isPanelOpen = false;
+            panel.classList.remove('active');
+            gearButton.classList.remove('active');
+        }
+    });
+
+    // 设置项变更监听
+    const checkbox = panel.querySelector('#simple-tooltip-checkbox');
+    checkbox.addEventListener('change', () => {
+        chartSettings.simpleTooltip = checkbox.checked;
+        localStorage.setItem(storageKey, JSON.stringify(chartSettings));
+
+        // 重新创建图表以应用设置
+        createPortfolioValueChart();
+
+        // 显示提示
+        showToast(checkbox.checked ? '已切换到简化模式 📉' : '已切换到详细模式 📊');
+    });
+}
+
+/**
+ * 显示临时提示消息（Toast）
+ */
+function showToast(message) {
+    const existingToast = document.querySelector('.chart-toast');
+    if (existingToast) existingToast.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'chart-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 // ========== 页面加载与数据处理 ==========
