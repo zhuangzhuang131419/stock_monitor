@@ -270,9 +270,8 @@ function generateThemeColors(count) {
 
 
 // ========== 新增：历史价值堆叠图 ==========
-// ========== 新增：历史价值堆叠图 ==========
 /**
- * 创建交互式历史价值堆叠图
+ * 创建交互式历史价值堆叠图 (v2 - 修正联动高亮逻辑)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -309,10 +308,8 @@ async function createPortfolioValueChart() {
         dataRows.forEach(row => {
             const values = row.split(',');
             if (values.length !== headers.length) return;
-
             labels.push(values[dateIndex]);
             totalValueData.push(parseFloat(values[totalValueIndex]) || 0);
-
             assetColumns.forEach(asset => {
                 const assetIndex = headers.indexOf(asset);
                 assetData[asset].push(parseValue(values[assetIndex]));
@@ -321,18 +318,11 @@ async function createPortfolioValueChart() {
 
         const themeColors = generateThemeColors(assetColumns.length);
 
-        // --- 新增：为联动高亮做准备 ---
-        // 1. 存储每个数据集的原始背景色
-        const originalBackgroundColors = assetColumns.map((_, index) => themeColors[index] + '80');
-        // 2. 定义一个“暗淡”的颜色，用于显示未被悬停的区域
-        const dimmedColor = 'rgba(100, 116, 139, 0.2)'; // 一个中性的半透明灰色
-        // --- 准备工作结束 ---
-
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            backgroundColor: originalBackgroundColors[index], // 使用原始颜色
-            borderColor: themeColors[index],
+            backgroundColor: themeColors[index] + '80', // 保持您原始的半透明背景色逻辑
+            borderColor: themeColors[index], // 边框颜色是纯色
             fill: 'origin',
             stack: 'combined',
             pointRadius: 0,
@@ -363,7 +353,6 @@ async function createPortfolioValueChart() {
         portfolioValueChart = new Chart(ctx, {
             type: 'line',
             data: { labels, datasets },
-            // --- 核心修改区域：更新 options ---
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -376,9 +365,8 @@ async function createPortfolioValueChart() {
                         font: { size: 16, family: 'Poppins' },
                         padding: { bottom: 20 }
                     },
-                    // --- 修改：启用并配置图例 ---
                     legend: {
-                        display: true, // 1. 将这里从 false 改为 true
+                        display: true,
                         position: 'bottom',
                         labels: {
                             padding: 15,
@@ -388,36 +376,37 @@ async function createPortfolioValueChart() {
                             color: '#e0e5f3',
                             boxWidth: 10,
                             boxHeight: 10,
-                            // 2. 增加过滤器，不在图例中显示 "Total Value"
                             filter: function(legendItem, chartData) {
                                 return legendItem.text !== 'Total Value';
                             }
                         },
-                        // 3. 新增 onHover 和 onLeave 事件来实现联动高亮
+                        // --- 核心修正：更新 onHover 和 onLeave 的逻辑 ---
                         onHover: (event, legendItem, legend) => {
                             const chart = legend.chart;
                             const hoveredDatasetIndex = legendItem.datasetIndex;
+                            const dimmedColor = 'rgba(100, 116, 139, 0.2)'; // 暗淡颜色
 
                             chart.data.datasets.forEach((dataset, index) => {
-                                // 忽略 "Total Value" 线条
-                                if (dataset.label === 'Total Value') return;
+                                // 忽略 "Total Value" 线条和图例中没有的项目
+                                if (dataset.label === 'Total Value' || dataset.hidden) return;
 
                                 // 如果当前数据集不是被悬停的那个，就让它变暗
                                 if (index !== hoveredDatasetIndex) {
                                     dataset.backgroundColor = dimmedColor;
                                 } else {
-                                // 否则，恢复它的原始颜色
-                                    dataset.backgroundColor = originalBackgroundColors[index];
+                                    // 否则，根据边框颜色重新生成半透明背景色
+                                    dataset.backgroundColor = dataset.borderColor + '80';
                                 }
                             });
-                            chart.update(); // 更新图表以应用样式
+                            chart.update();
                         },
                         onLeave: (event, legendItem, legend) => {
                             const chart = legend.chart;
                             // 鼠标离开图例区域，恢复所有区域的原始颜色
                             chart.data.datasets.forEach((dataset, index) => {
-                                if (dataset.label !== 'Total Value') {
-                                    dataset.backgroundColor = originalBackgroundColors[index];
+                                if (dataset.label !== 'Total Value' && !dataset.hidden) {
+                                    // 根据每个数据集自己的边框颜色恢复背景色
+                                    dataset.backgroundColor = dataset.borderColor + '80';
                                 }
                             });
                             chart.update();
@@ -441,27 +430,17 @@ async function createPortfolioValueChart() {
                 scales: {
                     x: {
                         type: 'time',
-                        time: {
-                            tooltipFormat: 'MMM dd, yyyy',
-                            displayFormats: {
-                                day: 'MMM dd', week: 'MMM dd', month: 'MMM yyyy', year: 'yyyy'
-                            }
-                        },
+                        time: { tooltipFormat: 'MMM dd, yyyy', displayFormats: { day: 'MMM dd', week: 'MMM dd', month: 'MMM yyyy', year: 'yyyy' }},
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: {
-                            color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 10
-                        },
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 10 },
                     },
                     y: {
                         stacked: true,
                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                        ticks: {
-                            color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k'
-                        }
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k' }
                     }
                 }
             }
-            // --- 核心修改区域结束 ---
         });
 
     } catch (error) {
