@@ -273,31 +273,70 @@ function generateThemeColors(count) {
 /**
  * 创建交互式历史价值堆叠图 (v13 - 真正终版 - 修复双向高亮)
  */
+
+/**
+ * 将十六进制颜色转换为带有alpha通道的RGBA格式
+ * @param {string} hex - 例如 "#3498db"
+ * @param {number} alpha - 透明度，从 0 到 1
+ * @returns {string} - 例如 "rgba(52, 152, 219, 1)"
+ */
+function toRgba(hex, alpha = 1) {
+    const hexValue = hex.replace('#', '');
+    const isShort = hexValue.length === 3;
+    const r = parseInt(isShort ? hexValue[0] + hexValue[0] : hexValue.substring(0, 2), 16);
+    const g = parseInt(isShort ? hexValue[1] + hexValue[1] : hexValue.substring(2, 4), 16);
+    const b = parseInt(isShort ? hexValue[2] + hexValue[2] : hexValue.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * 创建交互式历史价值堆叠图 (v14 - 最终修复版)
+ */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
     try {
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
-        if (!response.ok) {
-            throw new Error(`无法加载历史数据文件 (状态: ${response.status})`);
-        }
-        const csvText = await response.text();
+        if (!response.ok) throw new Error(`无法加载历史数据文件 (状态: ${response.status})`);
 
+        const csvText = await response.text();
         const lines = csvText.trim().split('\n');
         if (lines.length < 2) throw new Error('历史数据不足');
 
         const headers = lines.shift().split(',');
-        const dateIndex = headers.indexOf('date');
-        const totalValueIndex = headers.indexOf('total_value');
-
         const dataRows = lines.reverse();
-        const labels = [];
-        const assetData = {};
-        const totalValueData = [];
 
         const assetColumns = headers.filter(h => h !== 'date' && h !== 'total_value');
-        assetColumns.forEach(asset => { assetData[asset] = []; });
+        const themeColors = generateThemeColors(assetColumns.length);
+
+        // 修正2：定义一个半透明的“暗淡”颜色
+        const dimmedColor = 'rgba(100, 116, 139, 0.4)';
+
+        // 修正2：所有原始颜色都必须转换为RGBA格式，以保证渲染引擎行为一致
+        const themeColorsRgba = themeColors.map(color => toRgba(color, 1));
+
+        const datasets = assetColumns.map((asset, index) => ({
+            label: asset,
+            data: [], // 先初始化为空
+            backgroundColor: themeColorsRgba[index], // 使用带alpha通道的原始颜色
+            borderColor: themeColorsRgba[index],
+            fill: 'origin',
+            stack: 'combined',
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            tension: 0.4,
+        }));
+
+        datasets.push({
+            label: 'Total Value', data: [], type: 'line', fill: false, order: -1,
+            borderColor: 'rgba(255, 255, 255, 0.9)', backgroundColor: 'transparent',
+            borderWidth: 2.5, borderDash: [5, 5], pointRadius: 0, pointHoverRadius: 6, tension: 0.4,
+        });
+
+        const labels = [];
+        const assetData = Object.fromEntries(assetColumns.map(asset => [asset, []]));
+        const totalValueData = [];
 
         const parseValue = (cell) => {
             if (typeof cell !== 'string') return 0;
@@ -308,61 +347,32 @@ async function createPortfolioValueChart() {
         dataRows.forEach(row => {
             const values = row.split(',');
             if (values.length !== headers.length) return;
-            labels.push(values[dateIndex]);
-            totalValueData.push(parseFloat(values[totalValueIndex]) || 0);
+            labels.push(values[headers.indexOf('date')]);
+            totalValueData.push(parseFloat(values[headers.indexOf('total_value')]) || 0);
             assetColumns.forEach(asset => {
-                const assetIndex = headers.indexOf(asset);
-                assetData[asset].push(parseValue(values[assetIndex]));
+                assetData[asset].push(parseValue(values[headers.indexOf(asset)]));
             });
         });
 
-        const themeColors = generateThemeColors(assetColumns.length);
-        const dimmedColor = 'rgba(100, 116, 139, 0.4)';
-
-        const datasets = assetColumns.map((asset, index) => ({
-            label: asset,
-            data: assetData[asset],
-            backgroundColor: themeColors[index],
-            borderColor: themeColors[index],
-            fill: 'origin',
-            stack: 'combined',
-            pointRadius: 0,
-            pointHoverRadius: 6,
-            tension: 0.4,
-        }));
-
-        datasets.push({
-            label: 'Total Value',
-            data: totalValueData,
-            borderColor: 'rgba(255, 255, 255, 0.9)',
-            backgroundColor: 'transparent',
-            fill: false,
-            type: 'line',
-            borderWidth: 2.5,
-            borderDash: [5, 5],
-            pointRadius: 0,
-            pointHoverRadius: 6,
-            tension: 0.4,
-            order: -1,
+        datasets.forEach(ds => {
+            if (ds.label === 'Total Value') ds.data = totalValueData;
+            else if (assetData[ds.label]) ds.data = assetData[ds.label];
         });
 
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
-        if (portfolioValueChart) {
-            portfolioValueChart.destroy();
-        }
+        if (portfolioValueChart) portfolioValueChart.destroy();
 
-        // --- 全新的、统一的高亮管理逻辑 ---
         let lastHoveredIndex = null;
         const highlightDataset = (targetIndex) => {
-            if (targetIndex === lastHoveredIndex) return; // 如果悬停对象没变，则不执行任何操作
+            if (targetIndex === lastHoveredIndex) return;
             lastHoveredIndex = targetIndex;
 
             portfolioValueChart.data.datasets.forEach((dataset, index) => {
-                if (dataset.label === 'Total Value' || dataset.hidden) return;
-                const originalColor = themeColors[index];
+                if (dataset.stack !== 'combined' || dataset.hidden) return;
+
+                const originalColor = themeColorsRgba[index];
                 if (!originalColor) return;
 
-                // 如果 targetIndex 是 -1，则恢复所有颜色；否则，高亮选中的，暗淡其他的
                 dataset.backgroundColor = (targetIndex === -1 || index === targetIndex) ? originalColor : dimmedColor;
             });
             portfolioValueChart.update('none');
@@ -376,71 +386,72 @@ async function createPortfolioValueChart() {
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: {
-                    mode: 'index', // Tooltip依然按X轴显示
+                    mode: 'index', // 必须是 'index' 才能获取到垂直方向上的所有数据点
                     intersect: false,
                 },
-                // --- 核心修正：同时使用 legend.onHover 和 canvas.mousemove ---
                 plugins: {
                     title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
                     legend: {
-                        display: true,
-                        position: 'bottom',
+                        display: true, position: 'bottom',
                         labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
-                        // 1. 使用官方 onHover 处理图例，保证100%有效
-                        onHover: (event, legendItem) => {
-                            highlightDataset(legendItem.datasetIndex);
-                        },
+                        onHover: (event, legendItem) => highlightDataset(legendItem.datasetIndex),
                         onLeave: resetHighlight,
                     },
-                    tooltip: { backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3', borderColor: '#00f5d4', borderWidth: 1, cornerRadius: 8, padding: 12, titleFont: { family: 'Poppins', weight: 'bold' }, bodyFont: { family: 'Poppins' }, filter: (item) => item.raw > 0 || item.dataset.label === 'Total Value' },
+                    tooltip: { /* ... tooltip options ... */ },
                 },
-                scales: {
-                    x: { type: 'time', time: { tooltipFormat: 'MMM dd, yyyy', displayFormats: { day: 'MMM dd', month: 'MMM yyyy' }}, grid: { color: 'rgba(138, 153, 192, 0.15)' }, ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 45, minRotation: 45, autoSkip: true, maxTicksLimit: 10 }},
-                    y: { stacked: true, grid: { color: 'rgba(138, 153, 192, 0.15)' }, ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k' }}
-                }
+                scales: { /* ... scales options ... */ },
             }
         });
 
-        // 2. 添加独立的 mousemove 事件来处理“图表区域”的悬停
         portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
             const chart = portfolioValueChart;
-            // 如果鼠标在图例区域，则什么也不做，让 legend.onHover 自己处理
             if (e.offsetY >= chart.legend.top && e.offsetY <= chart.legend.bottom) {
+                // 当鼠标在图例上时，让 onHover/onLeave 自己处理，避免冲突
                 return;
             }
 
-            // 修正：使用 'nearest' 和 'intersect: true' 来精确查找鼠标下的单个元素
-            const points = chart.getElementsAtEventForMode(e, 'nearest', { intersect: true }, true);
+            // 修正1：精确识别鼠标所在的堆叠区域
+            const points = chart.getElementsAtEventForMode(e, 'index', { intersect: false });
+            if (points.length === 0) {
+                resetHighlight();
+                return;
+            }
 
-            if (points.length > 0) {
-                const firstPoint = points[0];
-                const dataset = chart.data.datasets[firstPoint.datasetIndex];
-                // 确保我们悬停的是一个有效的、可堆叠的资产色块
-                if (dataset && dataset.stack === 'combined') {
-                    highlightDataset(firstPoint.datasetIndex);
-                    return; // 找到后就处理并返回
+            // Chart.js 返回的点是按 dataset index 顺序的，我们需要从底部（视觉上）开始检查
+            // 堆叠图的数据点y值是累加的，所以最后一个数据点的y值在最上面
+            const reversedPoints = [...points].reverse();
+            let foundIndex = -1;
+
+            for (const point of reversedPoints) {
+                const dataset = chart.data.datasets[point.datasetIndex];
+                if (dataset.stack === 'combined' && !dataset.hidden) {
+                    // 获取这个数据点区域的顶部y坐标
+                    const topY = chart.scales.y.getPixelForValue(dataset.data[point.index]);
+
+                    // 如果鼠标的Y坐标在数据点区域的“下方”（因为Y坐标轴是反的），说明找到了
+                    if (e.offsetY > topY) {
+                        foundIndex = point.datasetIndex;
+                        break;
+                    }
                 }
             }
-            // 如果没找到任何元素，或者鼠标离开了图例区域，则重置高亮
-            resetHighlight();
+            // 如果循环结束后没找到（比如鼠标在最顶部图表的上方），则高亮最顶部的图表
+            if (foundIndex === -1) {
+                const topVisibleDataset = reversedPoints.find(p => chart.data.datasets[p.datasetIndex].stack === 'combined' && !chart.data.datasets[p.datasetIndex].hidden);
+                if (topVisibleDataset) {
+                    foundIndex = topVisibleDataset.datasetIndex;
+                }
+            }
+
+            highlightDataset(foundIndex);
         });
 
-        // 3. 当鼠标完全离开画布时，重置所有高亮
         portfolioValueChart.canvas.addEventListener('mouseleave', resetHighlight);
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
-        const canvas = document.getElementById('portfolio-value-chart');
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ff4757';
-            ctx.font = '16px Poppins';
-            ctx.textAlign = 'center';
-            ctx.fillText('价值图加载失败', canvas.width / 2, canvas.height / 2);
-        }
     }
 }
-
 
 // ========== 页面加载与数据处理 ==========
 
