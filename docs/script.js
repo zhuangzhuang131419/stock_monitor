@@ -292,11 +292,9 @@ function toRgba(color, alpha) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (v10 - 终极诊断版)
+ * 创建交互式历史价值堆叠图 (v11 - 最终正确版)
  */
 async function createPortfolioValueChart() {
-    // ... (这部分数据加载和图表配置的代码与之前版本完全相同，因此省略以保持简洁) ...
-    // ... (The data loading and chart configuration part is identical to previous versions, so it's omitted for brevity) ...
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
@@ -341,6 +339,7 @@ async function createPortfolioValueChart() {
 
         const themeColors = generateThemeColors(assetColumns.length);
         const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
+        const dimmedColor = 'rgba(100, 116, 139, 0.2)';
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
@@ -400,10 +399,37 @@ async function createPortfolioValueChart() {
                             color: '#e0e5f3',
                             boxWidth: 10,
                             boxHeight: 10,
-                            filter: function(legendItem, chartData) {
-                                return legendItem.text !== 'Total Value';
-                            }
+                            filter: (legendItem) => legendItem.text !== 'Total Value'
                         },
+                        // --- V11 核心：使用官方推荐的 onHover 和 onLeave 事件 ---
+                        onHover: (event, legendItem, legend) => {
+                            // 当鼠标悬停在某个图例项上时
+                            legend.chart.data.datasets.forEach((dataset, index) => {
+                                if (dataset.label === 'Total Value' || dataset.hidden) return;
+
+                                if (index === legendItem.datasetIndex) {
+                                    // 高亮选中的
+                                    if(backgroundColorsRgba[index]) {
+                                        dataset.backgroundColor = backgroundColorsRgba[index];
+                                    }
+                                } else {
+                                    // 暗淡其他的
+                                    dataset.backgroundColor = dimmedColor;
+                                }
+                            });
+                            legend.chart.update('none');
+                        },
+                        onLeave: (event, legendItem, legend) => {
+                            // 当鼠标离开整个图例区域时，恢复所有颜色
+                            legend.chart.data.datasets.forEach((dataset, index) => {
+                                if (dataset.label !== 'Total Value' && !dataset.hidden) {
+                                    if(backgroundColorsRgba[index]) {
+                                        dataset.backgroundColor = backgroundColorsRgba[index];
+                                    }
+                                }
+                            });
+                            legend.chart.update('none');
+                        }
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -415,9 +441,7 @@ async function createPortfolioValueChart() {
                         padding: 12,
                         titleFont: { family: 'Poppins', weight: 'bold' },
                         bodyFont: { family: 'Poppins' },
-                        filter: function(tooltipItem) {
-                            return tooltipItem.raw > 0 || tooltipItem.dataset.label === 'Total Value';
-                        }
+                        filter: (tooltipItem) => tooltipItem.raw > 0 || tooltipItem.dataset.label === 'Total Value'
                     },
                 },
                 scales: {
@@ -434,88 +458,6 @@ async function createPortfolioValueChart() {
                     }
                 }
             }
-        });
-
-
-        // --- 从这里开始是 V10 终极诊断版的核心 ---
-        let lastHoveredLegendIndex = null;
-        const dimmedColor = 'rgba(100, 116, 139, 0.2)';
-
-        const restoreLegendColors = () => {
-            portfolioValueChart.data.datasets.forEach((dataset, index) => {
-                if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                    if(backgroundColorsRgba[index]) {
-                       dataset.backgroundColor = backgroundColorsRgba[index];
-                    }
-                }
-            });
-            portfolioValueChart.update('none');
-        };
-
-        portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
-            const legend = portfolioValueChart.legend;
-
-            // --- 终极诊断点：无论如何都打印出坐标进行对比 ---
-            if (legend) {
-                console.log(
-                    `Mouse Y: ${e.offsetY.toFixed(0)}  |  ` +
-                    `Legend Area: (top: ${legend.top?.toFixed(0)}, bottom: ${legend.bottom?.toFixed(0)})  |  ` +
-                    `Hitboxes found: ${legend.hitboxes?.length || 0}`
-                );
-            } else {
-                console.log('Legend object not found!');
-                return;
-            }
-            // --- 诊断结束 ---
-
-            if (!legend.hitboxes || legend.hitboxes.length === 0) {
-                return;
-            }
-
-            const legendItems = legend.legendItems;
-            let hoveredIndex = -1;
-
-            for (let i = 0; i < legend.hitboxes.length; i++) {
-                const hitbox = legend.hitboxes[i];
-                if (hitbox && e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
-                    e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height)
-                {
-                    if(legendItems[i] && legendItems[i].text !== 'Total Value') {
-                        hoveredIndex = legendItems[i].datasetIndex;
-                        break;
-                    }
-                }
-            }
-
-            if (hoveredIndex === lastHoveredLegendIndex) {
-                return;
-            }
-
-            lastHoveredLegendIndex = hoveredIndex;
-
-            if (hoveredIndex !== -1) {
-                portfolioValueChart.data.datasets.forEach((dataset, index) => {
-                    if (dataset.label === 'Total Value' || dataset.hidden) return;
-
-                    if (index !== hoveredIndex) {
-                        dataset.backgroundColor = dimmedColor;
-                    } else {
-                        if(backgroundColorsRgba[index]) {
-                            dataset.backgroundColor = backgroundColorsRgba[index];
-                        }
-                    }
-                });
-                portfolioValueChart.update('none');
-            } else {
-                restoreLegendColors();
-            }
-        });
-
-        portfolioValueChart.canvas.addEventListener('mouseout', () => {
-             if (lastHoveredLegendIndex !== null) {
-                lastHoveredLegendIndex = null;
-                restoreLegendColors();
-             }
         });
 
     } catch (error) {
