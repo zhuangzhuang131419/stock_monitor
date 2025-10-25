@@ -287,16 +287,21 @@ function toRgba(hex, alpha = 1) {
 
 /**
  * 创建交互式历史价值堆叠图
- * [优化] 1. 高亮效果升级为动态“光泽扫过”动画，确保在任何底色上都清晰可见。
+ * [优化] 1. 高亮效果升级为动态“光泽扫过”动画，并在高亮期间持续循环播放。
  * [优化] 2. 保留并优化图例高亮交互（文字变大、色球出现边框）。
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
-    // --- 动画状态变量 ---
-    let shimmerAnimationId = null;
+    // --- 全局动画状态变量 ---
+    // 将这些变量放在函数外部，以确保它们在图表重绘时能被正确清理
+    if (window.shimmerAnimationId) {
+        cancelAnimationFrame(window.shimmerAnimationId);
+    }
     let shimmerPosition = 0; // 光泽效果的位置 (0 to 1.5, >1 a pause)
+    let lastHoveredIndex = null;
+    let isHoveringLegend = false;
 
     try {
         const response = await fetch(`${historyUrl}?t=${timestamp}`);
@@ -313,14 +318,10 @@ async function createPortfolioValueChart() {
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 0.85));
 
-        // --- 状态变量 ---
-        let lastHoveredIndex = null;
-        let isHoveringLegend = false;
-
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: [],
-            // --- 核心优化：使用函数式选项实现动态光泽背景 ---
+            // --- 核心优化：背景色依然由函数动态计算 ---
             backgroundColor: context => {
                 const chart = context.chart;
                 const { ctx, chartArea } = chart;
@@ -329,25 +330,23 @@ async function createPortfolioValueChart() {
                 // 如果当前数据集是高亮状态，则应用光泽效果
                 if (context.datasetIndex === lastHoveredIndex) {
                     const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-                    const shimmerWidth = 0.15; // 光泽的宽度
-                    const shimmerColor = 'rgba(255, 255, 255, 0.6)'; // 光泽的颜色
+                    const shimmerWidth = 0.15;
+                    const shimmerColor = 'rgba(255, 255, 255, 0.6)';
                     const baseColor = originalColorsRgba[index];
 
-                    // 计算光泽带的位置
                     const start = shimmerPosition - shimmerWidth;
-                    const end = shimmerPosition + shimmerWidth;
+                    const end = shimmerPosition;
 
-                    // 创建渐变
                     gradient.addColorStop(0, baseColor);
                     if (start > 0) gradient.addColorStop(Math.max(0, start), baseColor);
-                    gradient.addColorStop(Math.min(1, shimmerPosition), shimmerColor);
-                    if (end < 1) gradient.addColorStop(Math.min(1, end), baseColor);
+                    gradient.addColorStop(Math.min(1, end), shimmerColor);
+                    if (end < 1) gradient.addColorStop(Math.min(1, end + shimmerWidth), baseColor);
                     gradient.addColorStop(1, baseColor);
 
                     return gradient;
                 }
 
-                return originalColorsRgba[index]; // 否则返回原始半透明色
+                return originalColorsRgba[index];
             },
             borderColor: 'transparent',
             borderWidth: 0,
@@ -395,34 +394,12 @@ async function createPortfolioValueChart() {
         const ctx = document.getElementById('portfolio-value-chart').getContext('2d');
         if (portfolioValueChart) portfolioValueChart.destroy();
 
-        // --- 动画循环 ---
-        const shimmerLoop = () => {
-            shimmerPosition = (shimmerPosition + 0.01) % 1.5; // 1.5 để có khoảng dừng
-            if (portfolioValueChart) {
-                portfolioValueChart.update('none'); // 只更新，不触发动画
-            }
-            shimmerAnimationId = requestAnimationFrame(shimmerLoop);
-        };
-
-        // --- 交互逻辑 ---
+        // --- 交互逻辑：只更新状态，不控制动画启停 ---
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             lastHoveredIndex = targetIndex;
-
-            // 停止旧的动画
-            if (shimmerAnimationId) {
-                cancelAnimationFrame(shimmerAnimationId);
-                shimmerAnimationId = null;
-            }
-
-            // 如果有高亮项，则启动动画
-            if (targetIndex !== null) {
-                shimmerPosition = 0;
-                shimmerLoop();
-            } else {
-                // 如果没有高亮项，立即重绘一次以恢复正常状态
-                if (portfolioValueChart) portfolioValueChart.update('none');
-            }
+            // 立即更新一次图表以响应状态变化（特别是图例）
+            if (portfolioValueChart) portfolioValueChart.update('none');
         };
 
         const resetHighlight = () => {
@@ -446,7 +423,7 @@ async function createPortfolioValueChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: { duration: 0 }, // 禁用 Chart.js 的默认动画
+                animation: { duration: 0 },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     title: { display: true, text: '资产价值历史趋势', color: '#e0e5f3', font: { size: 16, family: 'Poppins' }, padding: { bottom: 20 } },
@@ -457,29 +434,24 @@ async function createPortfolioValueChart() {
                             usePointStyle: true,
                             pointStyle: 'circle',
                             color: '#e0e5f3',
-                            // --- 优化：高亮时图例项变大 + 加边框 ---
                             font: context => ({
                                 family: 'Poppins',
                                 size: context.index === lastHoveredIndex ? 13 : 11,
                                 weight: context.index === lastHoveredIndex ? '600' : 'normal'
                             }),
-                            // 通过 pointStyle 配置实现边框
                             pointStyle: context => {
                                 if (context.index === lastHoveredIndex) {
                                     const canvas = context.chart.canvas;
                                     const style = canvas.getContext('2d');
-                                    const image = style.createImageData(12, 12); // 创建一个12x12的图像
+                                    const image = style.createImageData(12, 12);
                                     const radius = 6;
                                     for (let x = 0; x < 12; x++) {
                                         for (let y = 0; y < 12; y++) {
                                             const dist = Math.sqrt((x - radius) ** 2 + (y - radius) ** 2);
-                                            if (dist > radius - 1.5 && dist <= radius) { // 这是边框
+                                            if (dist > radius - 1.5 && dist <= radius) {
                                                 const [r, g, b] = [0, 245, 212];
                                                 const i = (y * 12 + x) * 4;
-                                                image.data[i] = r;
-                                                image.data[i + 1] = g;
-                                                image.data[i + 2] = b;
-                                                image.data[i + 3] = 255;
+                                                image.data[i] = r; image.data[i+1] = g; image.data[i+2] = b; image.data[i+3] = 255;
                                             }
                                         }
                                     }
@@ -507,12 +479,7 @@ async function createPortfolioValueChart() {
                         filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
                         callbacks: {
                             title: (context) => context[0].label,
-                            label: (context) => {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw);
-                                return label;
-                            }
+                            label: (context) => `${context.dataset.label || ''}: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw)}`
                         }
                     },
                 },
@@ -522,6 +489,24 @@ async function createPortfolioValueChart() {
                 }
             }
         });
+
+        // --- 核心优化：启动一个持续运行的动画循环 ---
+        const shimmerLoop = () => {
+            // 持续更新光泽位置，使用 1.2 的模数让循环之间有短暂的停顿
+            shimmerPosition = (shimmerPosition + 0.015) % 1.2;
+
+            // 只有当有项目被高亮时，才重绘图表以应用动画效果
+            if (lastHoveredIndex !== null && portfolioValueChart) {
+                portfolioValueChart.update('none'); // 'none'表示只重绘，不触发Chart.js自带的动画
+            }
+
+            // 请求下一帧，形成循环
+            window.shimmerAnimationId = requestAnimationFrame(shimmerLoop);
+        };
+
+        // 启动全局动画循环
+        shimmerLoop();
+
 
         // ========== 带插值的区域检测逻辑 (无需修改) ==========
         const canvas = document.getElementById('portfolio-value-chart');
