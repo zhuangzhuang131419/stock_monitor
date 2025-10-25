@@ -271,28 +271,7 @@ function generateThemeColors(count) {
 
 // ========== 新增：历史价值堆叠图 ==========
 /**
- * 新增：将任何有效的CSS颜色字符串转换为带透明度的RGBA格式
- * @param {string} color 任何颜色字符串 (e.g., '#00f5d4', 'hsl(175, 100%, 48%)')
- * @param {number} alpha 透明度 (0 到 1)
- * @returns {string} 返回 'rgba(r, g, b, alpha)' 格式的字符串
- */
-function toRgba(color, alpha) {
-    // 这是一个利用浏览器自身渲染引擎来解析颜色的技巧
-    const elem = document.createElement('div');
-    elem.style.color = color;
-    document.body.appendChild(elem); // 必须添加到DOM中才能计算样式
-
-    // 获取浏览器计算后的颜色，它总是 "rgb(r, g, b)" 格式
-    const rgbColor = window.getComputedStyle(elem).color;
-
-    document.body.removeChild(elem); // 清理临时元素
-
-    // 将 "rgb(r, g, b)" 替换为 "rgba(r, g, b, alpha)"
-    return rgbColor.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
-}
-
-/**
- * 创建交互式历史价值堆叠图 (v11 - 最终正确版)
+ * 创建交互式历史价值堆叠图 (v12 - 终版 - 双向高亮)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -337,14 +316,14 @@ async function createPortfolioValueChart() {
             });
         });
 
+        // --- 颜色方案已回退：直接使用不透明的主题色 ---
         const themeColors = generateThemeColors(assetColumns.length);
-        const backgroundColorsRgba = themeColors.map(color => toRgba(color, 0.5));
-        const dimmedColor = 'rgba(100, 116, 139, 0.2)';
+        const dimmedColor = 'rgba(100, 116, 139, 0.4)'; // 用于“暗淡”效果的半透明灰色
 
         const datasets = assetColumns.map((asset, index) => ({
             label: asset,
             data: assetData[asset],
-            backgroundColor: backgroundColorsRgba[index],
+            backgroundColor: themeColors[index], // 直接使用原始颜色
             borderColor: themeColors[index],
             fill: 'origin',
             stack: 'combined',
@@ -379,7 +358,11 @@ async function createPortfolioValueChart() {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
+                // 交互模式对于图表区域悬停至关重要
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 plugins: {
                     title: {
                         display: true,
@@ -401,35 +384,7 @@ async function createPortfolioValueChart() {
                             boxHeight: 10,
                             filter: (legendItem) => legendItem.text !== 'Total Value'
                         },
-                        // --- V11 核心：使用官方推荐的 onHover 和 onLeave 事件 ---
-                        onHover: (event, legendItem, legend) => {
-                            // 当鼠标悬停在某个图例项上时
-                            legend.chart.data.datasets.forEach((dataset, index) => {
-                                if (dataset.label === 'Total Value' || dataset.hidden) return;
-
-                                if (index === legendItem.datasetIndex) {
-                                    // 高亮选中的
-                                    if(backgroundColorsRgba[index]) {
-                                        dataset.backgroundColor = backgroundColorsRgba[index];
-                                    }
-                                } else {
-                                    // 暗淡其他的
-                                    dataset.backgroundColor = dimmedColor;
-                                }
-                            });
-                            legend.chart.update('none');
-                        },
-                        onLeave: (event, legendItem, legend) => {
-                            // 当鼠标离开整个图例区域时，恢复所有颜色
-                            legend.chart.data.datasets.forEach((dataset, index) => {
-                                if (dataset.label !== 'Total Value' && !dataset.hidden) {
-                                    if(backgroundColorsRgba[index]) {
-                                        dataset.backgroundColor = backgroundColorsRgba[index];
-                                    }
-                                }
-                            });
-                            legend.chart.update('none');
-                        }
+                        // 我们将使用手动的mousemove事件，因此移除这里的onHover/onLeave
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)',
@@ -457,6 +412,81 @@ async function createPortfolioValueChart() {
                         ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => '$' + (value / 1000).toFixed(0) + 'k' }
                     }
                 }
+            }
+        });
+
+        // --- 全新的双向高亮事件处理逻辑 ---
+        let lastHoveredIndex = null;
+
+        const restoreOriginalColors = () => {
+            portfolioValueChart.data.datasets.forEach((dataset, index) => {
+                if (dataset.label !== 'Total Value' && !dataset.hidden && themeColors[index]) {
+                   dataset.backgroundColor = themeColors[index];
+                }
+            });
+            portfolioValueChart.update('none');
+        };
+
+        portfolioValueChart.canvas.addEventListener('mousemove', (e) => {
+            const legend = portfolioValueChart.legend;
+            let currentHoveredIndex = -1;
+
+            // 1. 检查是否悬停在下方的“图例区域”
+            if (e.offsetY >= legend.top && e.offsetY <= legend.bottom) {
+                const legendItems = legend.legendItems;
+                for (let i = 0; i < legend.hitboxes.length; i++) {
+                    const hitbox = legend.hitboxes[i];
+                    if (hitbox && e.offsetX >= hitbox.left && e.offsetX <= hitbox.left + hitbox.width &&
+                        e.offsetY >= hitbox.top && e.offsetY <= hitbox.top + hitbox.height) {
+                        if (legendItems[i] && legendItems[i].text !== 'Total Value') {
+                            currentHoveredIndex = legendItems[i].datasetIndex;
+                            break;
+                        }
+                    }
+                }
+            }
+            // 2. 如果不在图例上，则检查是否悬停在上面的“图表区域”
+            else {
+                const points = portfolioValueChart.getElementsAtEventForMode(e, 'index', { intersect: false });
+                if (points.length > 0) {
+                    // 查找第一个可见的、非“总价值”的堆叠区域
+                    const activePoint = points.find(p => {
+                        const dataset = portfolioValueChart.data.datasets[p.datasetIndex];
+                        return dataset && dataset.stack === 'combined' && !dataset.hidden;
+                    });
+                    if (activePoint) {
+                        currentHoveredIndex = activePoint.datasetIndex;
+                    }
+                }
+            }
+
+            // 3. 如果悬停状态没有改变，则不执行任何操作，以提高性能
+            if (currentHoveredIndex === lastHoveredIndex) {
+                return;
+            }
+            lastHoveredIndex = currentHoveredIndex;
+
+            // 4. 根据悬停状态更新所有色块的颜色
+            if (currentHoveredIndex !== -1) {
+                portfolioValueChart.data.datasets.forEach((dataset, index) => {
+                    if (dataset.label === 'Total Value' || dataset.hidden) return;
+
+                    // 高亮选中的，暗淡其他的
+                    dataset.backgroundColor = (index === currentHoveredIndex) ? themeColors[index] : dimmedColor;
+                });
+            } else {
+                // 如果没有悬停在任何有效区域，则恢复所有原始颜色
+                restoreOriginalColors();
+            }
+
+            portfolioValueChart.update('none'); // 'none' 表示无动画更新，响应更灵敏
+        });
+
+        // 5. 当鼠标完全移出图表画布时，恢复所有颜色
+        portfolioValueChart.canvas.addEventListener('mouseleave', () => {
+            if (lastHoveredIndex !== null) {
+                lastHoveredIndex = null;
+                restoreOriginalColors();
             }
         });
 
