@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (V20 修正版 - 移除区域高亮 & 修复X轴)
+ * 创建交互式历史价值堆叠图 (修复双向高亮功能)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -352,7 +352,7 @@ async function createPortfolioValueChart() {
             const values = row.split(',');
             if (values.length !== headers.length) return;
             const dateStr = values[headers.indexOf('date')];
-            if (!dateStr) return; // 跳过没有日期的行
+            if (!dateStr) return;
 
             labels.push(dateStr);
             totalValueData.push(parseFloat(values[headers.indexOf('total_value')]) || 0);
@@ -370,29 +370,38 @@ async function createPortfolioValueChart() {
         if (portfolioValueChart) portfolioValueChart.destroy();
 
         let lastHoveredIndex = null;
+        let isHoveringLegend = false; // 新增：标记是否在图例上
 
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             const chartDatasets = portfolioValueChart.data.datasets;
+
+            // 重置上一个高亮
             if (lastHoveredIndex !== null && lastHoveredIndex > -1) {
                 const prevDataset = chartDatasets[lastHoveredIndex];
                 if (prevDataset && prevDataset.stack === 'combined') {
                     prevDataset.backgroundColor = originalColorsRgba[lastHoveredIndex];
                 }
             }
+
+            // 设置新的高亮
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
                     targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
                 }
             }
+
             lastHoveredIndex = targetIndex;
             portfolioValueChart.update('none');
         };
 
-        const resetHighlight = () => highlightDataset(-1);
+        const resetHighlight = () => {
+            if (!isHoveringLegend) { // 只有不在图例上时才重置
+                highlightDataset(-1);
+            }
+        };
 
-        // --- 关键改动 2：动态计算X轴的时间单位 ---
         let timeUnit = 'day';
         if (labels.length > 1) {
             const firstDate = new Date(labels[0]);
@@ -419,8 +428,14 @@ async function createPortfolioValueChart() {
                     legend: {
                         display: true, position: 'bottom',
                         labels: { padding: 15, usePointStyle: true, pointStyle: 'circle', font: { family: 'Poppins', size: 11 }, color: '#e0e5f3', boxWidth: 10, boxHeight: 10, filter: (item) => item.text !== 'Total Value' },
-                        onHover: (event, legendItem) => highlightDataset(legendItem.datasetIndex),
-                        onLeave: resetHighlight,
+                        onHover: (event, legendItem) => {
+                            isHoveringLegend = true; // 标记正在图例上
+                            highlightDataset(legendItem.datasetIndex);
+                        },
+                        onLeave: () => {
+                            isHoveringLegend = false; // 离开图例
+                            resetHighlight();
+                        },
                     },
                     tooltip: {
                         backgroundColor: 'rgba(29, 36, 58, 0.95)', titleColor: '#00f5d4', bodyColor: '#e0e5f3',
@@ -428,50 +443,50 @@ async function createPortfolioValueChart() {
                         titleFont: { family: 'Poppins', weight: 'bold' }, bodyFont: { family: 'Poppins' },
                         filter: (item) => (item.raw > 0 && item.dataset.stack === 'combined') || item.dataset.label === 'Total Value',
                         callbacks: {
-                             title: (context) => context[0].label,
-                             label: (context) => {
-                                 let label = context.dataset.label || '';
-                                 if (label) label += ': ';
-                                 label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw);
-                                 return label;
-                             }
+                            title: (context) => context[0].label,
+                            label: (context) => {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.raw);
+                                return label;
+                            }
                         }
                     },
                 },
                 scales: {
-                     // --- 关键改动 2：应用动态时间单位和更合理的格式 ---
-                     x: {
-                         type: 'time',
-                         time: {
-                             unit: timeUnit, // 应用动态计算出的时间单位
-                             tooltipFormat: 'yyyy-MM-dd',
-                             displayFormats: {
-                                 day: 'MMM d',
-                                 month: 'yyyy MMM',
-                                 year: 'yyyy'
-                             }
-                         },
-                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                         ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }
-                     },
-                     y: {
-                         stacked: true,
-                         grid: { color: 'rgba(138, 153, 192, 0.15)' },
-                         ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => (value / 1000).toFixed(0) + 'k' }
-                     }
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: timeUnit,
+                            tooltipFormat: 'yyyy-MM-dd',
+                            displayFormats: {
+                                day: 'MMM d',
+                                month: 'yyyy MMM',
+                                year: 'yyyy'
+                            }
+                        },
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 7 }
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { color: 'rgba(138, 153, 192, 0.15)' },
+                        ticks: { color: '#8a99c0', font: { family: 'Poppins' }, callback: value => (value / 1000).toFixed(0) + 'k' }
+                    }
                 }
             }
         });
 
+        // ========== 修复后的 Canvas 鼠标事件监听 ==========
         const canvas = document.getElementById('portfolio-value-chart');
 
         canvas.addEventListener('mousemove', (event) => {
-            if (!portfolioValueChart) return;
+            if (!portfolioValueChart || isHoveringLegend) return; // 如果在图例上，跳过
 
             const elements = portfolioValueChart.getElementsAtEventForMode(
                 event,
-                'nearest',
-                { intersect: true },
+                'point', // 改为 'point' 模式，更容易检测到堆叠区域
+                { intersect: false }, // 改为 false，放宽检测范围
                 false
             );
 
@@ -492,18 +507,22 @@ async function createPortfolioValueChart() {
         });
 
         canvas.addEventListener('mouseleave', () => {
-            canvas.style.cursor = 'default';
-            resetHighlight();
+            if (!isHoveringLegend) { // 只有不在图例上时才重置
+                canvas.style.cursor = 'default';
+                resetHighlight();
+            }
         });
+        // ========== 双向高亮功能修复完成 ==========
 
     } catch (error) {
         console.error('创建历史价值图表失败:', error);
         const canvas = document.getElementById('portfolio-value-chart');
         if (canvas) {
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ff4757'; ctx.font = '16px Poppins';
+            ctx.fillStyle = '#ff4757';
+            ctx.font = '16px Poppins';
             ctx.textAlign = 'center';
-            ctx.fillText('价值图加载失败，请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('价值图加载失败,请检查数据文件或刷新页面。', canvas.width / 2, canvas.height / 2);
         }
     }
 }
