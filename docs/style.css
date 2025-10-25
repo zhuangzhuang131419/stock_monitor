@@ -475,15 +475,3 @@ input.invalid { border-color: var(--negative-color) !important; background-color
 ::-webkit-scrollbar-track { background: var(--bg-color); }
 ::-webkit-scrollbar-thumb { background: var(--secondary-text); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-color); }
-
-/* ========== 图例动画支持 ========== */
-.chartjs-legend li {
-    display: inline-flex !important;
-    align-items: center !important;
-    transform-origin: center !important;
-}
-
-.chartjs-legend li span {
-    display: inline-block !important;
-    transform-origin: center !important;
-}
