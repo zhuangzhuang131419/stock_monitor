@@ -478,11 +478,12 @@ input.invalid { border-color: var(--negative-color) !important; background-color
 
 /* ========== 图例动画支持 ========== */
 .chartjs-legend li {
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-    transform-origin: center;
+    display: inline-flex !important;
+    align-items: center !important;
+    transform-origin: center !important;
 }
 
 .chartjs-legend li span {
-    transition: all 0.3s ease !important;
-    display: inline-block;
+    display: inline-block !important;
+    transform-origin: center !important;
 }

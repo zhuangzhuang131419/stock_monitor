@@ -286,7 +286,7 @@ function toRgba(hex, alpha = 1) {
 }
 
 /**
- * 创建交互式历史价值堆叠图 (超炫高亮效果 + 图例动画)
+ * 创建交互式历史价值堆叠图 (修复版 - 色块内高亮 + 图例放大)
  */
 async function createPortfolioValueChart() {
     const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
@@ -308,21 +308,18 @@ async function createPortfolioValueChart() {
         const themeColorsHex = generateThemeColors(assetColumns.length);
         const originalColorsRgba = themeColorsHex.map(color => toRgba(color, 1));
 
-        // ========== 生成高亮渐变色（更鲜艳） ==========
-        const highlightedColorsRgba = originalColorsRgba.map((rgbaColor, index) => {
-            const hex = themeColorsHex[index];
-            const parts = rgbaColor.match(/[\d.]+/g);
-            if (!parts) return rgbaColor;
+        // ========== 生成高亮色（更鲜艳但不发白） ==========
+        const highlightedColorsRgba = themeColorsHex.map(hex => {
+            // 转换为 HSL 提升饱和度和亮度
+            const rgb = hexToRgb(hex);
+            const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
 
-            let [r, g, b] = parts.map(Number);
+            // 饱和度提升到接近最大值，亮度适度提升
+            hsl.s = Math.min(100, hsl.s + 20);
+            hsl.l = Math.min(70, hsl.l + 15);
 
-            // 提升饱和度和亮度
-            const hsl = rgbToHsl(r, g, b);
-            hsl.s = Math.min(100, hsl.s * 1.3); // 饱和度提升30%
-            hsl.l = Math.min(80, hsl.l * 1.2);  // 亮度提升20%
-
-            const rgb = hslToRgb(hsl.h, hsl.s, hsl.l);
-            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 1)`;
+            const newRgb = hslToRgb(hsl.h, hsl.s, hsl.l);
+            return `rgba(${newRgb.r}, ${newRgb.g}, ${newRgb.b}, 1)`;
         });
 
         const datasets = assetColumns.map((asset, index) => ({
@@ -377,30 +374,94 @@ async function createPortfolioValueChart() {
 
         let lastHoveredIndex = null;
         let isHoveringLegend = false;
-        let currentAnimation = null;
+        let animationFrameId = null;
 
-        // ========== 创建 Canvas 叠加层用于特效 ==========
+        // ========== 创建叠加 Canvas 用于粒子效果 ==========
         const canvas = document.getElementById('portfolio-value-chart');
-        const overlayCanvas = document.createElement('canvas');
-        overlayCanvas.style.position = 'absolute';
-        overlayCanvas.style.top = '0';
-        overlayCanvas.style.left = '0';
-        overlayCanvas.style.pointerEvents = 'none';
-        overlayCanvas.style.zIndex = '10';
-        canvas.parentElement.style.position = 'relative';
-        canvas.parentElement.appendChild(overlayCanvas);
+        let overlayCanvas = canvas.parentElement.querySelector('.chart-overlay-canvas');
+
+        if (!overlayCanvas) {
+            overlayCanvas = document.createElement('canvas');
+            overlayCanvas.className = 'chart-overlay-canvas';
+            overlayCanvas.style.position = 'absolute';
+            overlayCanvas.style.top = '0';
+            overlayCanvas.style.left = '0';
+            overlayCanvas.style.pointerEvents = 'none';
+            overlayCanvas.style.zIndex = '5';
+            canvas.parentElement.style.position = 'relative';
+            canvas.parentElement.appendChild(overlayCanvas);
+        }
 
         const resizeOverlay = () => {
+            const rect = canvas.getBoundingClientRect();
             overlayCanvas.width = canvas.width;
             overlayCanvas.height = canvas.height;
-            overlayCanvas.style.width = canvas.style.width;
-            overlayCanvas.style.height = canvas.style.height;
+            overlayCanvas.style.width = canvas.offsetWidth + 'px';
+            overlayCanvas.style.height = canvas.offsetHeight + 'px';
         };
         resizeOverlay();
+        window.addEventListener('resize', resizeOverlay);
 
         const overlayCtx = overlayCanvas.getContext('2d');
 
-        // ========== 高亮函数：渐变 + 粒子效果 ==========
+        // ========== 粒子系统 ==========
+        let particles = [];
+        let isAnimating = false;
+
+        const createParticles = (datasetIndex) => {
+            if (!portfolioValueChart || !portfolioValueChart.chartArea) return;
+
+            const chartArea = portfolioValueChart.chartArea;
+            const color = themeColorsHex[datasetIndex];
+
+            particles = [];
+            for (let i = 0; i < 20; i++) {
+                particles.push({
+                    x: chartArea.left + Math.random() * (chartArea.right - chartArea.left),
+                    y: chartArea.top + Math.random() * (chartArea.bottom - chartArea.top),
+                    size: Math.random() * 2 + 1,
+                    speedX: (Math.random() - 0.5) * 1.5,
+                    speedY: (Math.random() - 0.5) * 1.5,
+                    opacity: Math.random() * 0.6 + 0.4,
+                    color: color
+                });
+            }
+        };
+
+        const animateParticles = () => {
+            if (!isAnimating) return;
+
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            const chartArea = portfolioValueChart.chartArea;
+
+            particles.forEach(p => {
+                // 绘制粒子
+                overlayCtx.beginPath();
+                overlayCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                overlayCtx.fillStyle = `${p.color}${Math.floor(p.opacity * 255).toString(16).padStart(2, '0')}`;
+                overlayCtx.shadowBlur = 8;
+                overlayCtx.shadowColor = p.color;
+                overlayCtx.fill();
+                overlayCtx.shadowBlur = 0;
+
+                // 更新位置
+                p.x += p.speedX;
+                p.y += p.speedY;
+
+                // 边界反弹
+                if (p.x < chartArea.left || p.x > chartArea.right) p.speedX *= -1;
+                if (p.y < chartArea.top || p.y > chartArea.bottom) p.speedY *= -1;
+
+                // 限制在图表区域内
+                p.x = Math.max(chartArea.left, Math.min(chartArea.right, p.x));
+                p.y = Math.max(chartArea.top, Math.min(chartArea.bottom, p.y));
+            });
+
+            animationFrameId = requestAnimationFrame(animateParticles);
+        };
+
+        // ========== 高亮函数 ==========
         const highlightDataset = (targetIndex) => {
             if (targetIndex === lastHoveredIndex) return;
             const chartDatasets = portfolioValueChart.data.datasets;
@@ -413,30 +474,23 @@ async function createPortfolioValueChart() {
                 }
             }
 
-            // 清除叠加层
+            // 停止动画
+            isAnimating = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
             // 应用新高亮
             if (targetIndex !== null && targetIndex > -1) {
                 const targetDataset = chartDatasets[targetIndex];
                 if (targetDataset && targetDataset.stack === 'combined') {
-                    // 创建动态渐变
-                    const gradient = ctx.createLinearGradient(
-                        0, 0,
-                        ctx.canvas.width, ctx.canvas.height
-                    );
+                    targetDataset.backgroundColor = highlightedColorsRgba[targetIndex];
 
-                    const baseColor = highlightedColorsRgba[targetIndex];
-                    const glowColor = baseColor.replace('1)', '0.6)');
-
-                    gradient.addColorStop(0, glowColor);
-                    gradient.addColorStop(0.5, baseColor);
-                    gradient.addColorStop(1, glowColor);
-
-                    targetDataset.backgroundColor = gradient;
-
-                    // ========== 添加粒子光效到叠加层 ==========
-                    drawParticleEffect(targetIndex);
+                    // 启动粒子动画
+                    createParticles(targetIndex);
+                    isAnimating = true;
+                    animateParticles();
                 }
             }
 
@@ -447,129 +501,54 @@ async function createPortfolioValueChart() {
             highlightLegendItem(targetIndex);
         };
 
-        // ========== 粒子光效函数 ==========
-        const drawParticleEffect = (datasetIndex) => {
-            if (!portfolioValueChart || !portfolioValueChart.chartArea) return;
-
-            const chartArea = portfolioValueChart.chartArea;
-            const color = themeColorsHex[datasetIndex];
-
-            // 创建闪烁光点
-            const particles = [];
-            for (let i = 0; i < 15; i++) {
-                particles.push({
-                    x: chartArea.left + Math.random() * (chartArea.right - chartArea.left),
-                    y: chartArea.top + Math.random() * (chartArea.bottom - chartArea.top),
-                    size: Math.random() * 3 + 1,
-                    opacity: Math.random() * 0.5 + 0.3,
-                    speedX: (Math.random() - 0.5) * 2,
-                    speedY: (Math.random() - 0.5) * 2
-                });
-            }
-
-            const animateParticles = () => {
-                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-                particles.forEach(p => {
-                    overlayCtx.beginPath();
-                    overlayCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                    overlayCtx.fillStyle = `${color}${Math.floor(p.opacity * 255).toString(16).padStart(2, '0')}`;
-                    overlayCtx.shadowBlur = 10;
-                    overlayCtx.shadowColor = color;
-                    overlayCtx.fill();
-
-                    p.x += p.speedX;
-                    p.y += p.speedY;
-                    p.opacity -= 0.01;
-                });
-
-                if (particles.some(p => p.opacity > 0)) {
-                    requestAnimationFrame(animateParticles);
-                }
-            };
-
-            animateParticles();
-        };
-
-        // ========== 图例高亮函数（使用 anime.js） ==========
+        // ========== 图例高亮函数（直接操作 DOM） ==========
         const highlightLegendItem = (targetIndex) => {
-            const legendContainer = portfolioValueChart.legend.legendItems;
-            if (!legendContainer) return;
+            // 等待图例渲染完成
+            setTimeout(() => {
+                const legendContainer = canvas.parentElement.querySelector('.chartjs-legend');
+                if (!legendContainer) return;
 
-            // 停止之前的动画
-            if (currentAnimation) {
-                currentAnimation.pause();
-            }
+                const legendItems = legendContainer.querySelectorAll('li');
 
-            legendContainer.forEach((item, index) => {
-                const legendElement = document.querySelector(`#portfolio-value-chart`).parentElement
-                    .querySelector(`.chartjs-legend li:nth-child(${index + 1})`);
+                legendItems.forEach((item, index) => {
+                    // 跳过 Total Value
+                    if (index >= assetColumns.length) return;
 
-                if (!legendElement) return;
+                    const textSpan = item.querySelector('span:last-child');
+                    const colorBox = item.querySelector('span:first-child');
 
-                const textSpan = legendElement.querySelector('span:last-child');
-                const colorBox = legendElement.querySelector('span:first-child');
+                    if (index === targetIndex) {
+                        // 高亮状态
+                        item.style.transform = 'scale(1.2)';
+                        item.style.transition = 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-                if (index === targetIndex) {
-                    // 高亮动画
-                    currentAnimation = anime({
-                        targets: legendElement,
-                        scale: [1, 1.2],
-                        duration: 400,
-                        easing: 'easeOutElastic(1, .6)'
-                    });
+                        if (textSpan) {
+                            textSpan.style.fontWeight = '700';
+                            textSpan.style.color = '#00f5d4';
+                            textSpan.style.transition = 'all 0.3s ease';
+                        }
 
-                    if (textSpan) {
-                        anime({
-                            targets: textSpan,
-                            color: ['#e0e5f3', '#00f5d4'],
-                            fontWeight: [500, 700],
-                            duration: 300,
-                            easing: 'easeOutQuad'
-                        });
+                        if (colorBox) {
+                            colorBox.style.transform = 'scale(1.4)';
+                            colorBox.style.boxShadow = `0 0 15px ${themeColorsHex[targetIndex]}`;
+                            colorBox.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                        }
+                    } else {
+                        // 恢复状态
+                        item.style.transform = 'scale(1)';
+
+                        if (textSpan) {
+                            textSpan.style.fontWeight = '500';
+                            textSpan.style.color = '#e0e5f3';
+                        }
+
+                        if (colorBox) {
+                            colorBox.style.transform = 'scale(1)';
+                            colorBox.style.boxShadow = 'none';
+                        }
                     }
-
-                    if (colorBox) {
-                        anime({
-                            targets: colorBox,
-                            scale: [1, 1.5],
-                            duration: 400,
-                            easing: 'easeOutElastic(1, .8)',
-                            begin: () => {
-                                colorBox.style.boxShadow = `0 0 20px ${themeColorsHex[targetIndex]}`;
-                            }
-                        });
-                    }
-                } else {
-                    // 恢复动画
-                    anime({
-                        targets: legendElement,
-                        scale: 1,
-                        duration: 300,
-                        easing: 'easeOutQuad'
-                    });
-
-                    if (textSpan) {
-                        anime({
-                            targets: textSpan,
-                            color: '#e0e5f3',
-                            fontWeight: 500,
-                            duration: 300
-                        });
-                    }
-
-                    if (colorBox) {
-                        anime({
-                            targets: colorBox,
-                            scale: 1,
-                            duration: 300,
-                            complete: () => {
-                                colorBox.style.boxShadow = 'none';
-                            }
-                        });
-                    }
-                }
-            });
+                });
+            }, 100);
         };
 
         const resetHighlight = () => {
@@ -756,7 +735,16 @@ async function createPortfolioValueChart() {
     }
 }
 
-// ========== 辅助函数：RGB 转 HSL ==========
+// ========== 辅助函数 ==========
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+}
+
 function rgbToHsl(r, g, b) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -776,7 +764,6 @@ function rgbToHsl(r, g, b) {
     return { h: h * 360, s: s * 100, l: l * 100 };
 }
 
-// ========== 辅助函数：HSL 转 RGB ==========
 function hslToRgb(h, s, l) {
     h /= 360; s /= 100; l /= 100;
     let r, g, b;
