@@ -258,14 +258,24 @@ function generateThemeColors(count) {
         '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f', '#bb8fce',
         '#85c1e9', '#f8c471', '#82e0aa', '#f1948a', '#d7bde2'
     ];
+
+    if (count <= baseColors.length) {
+        return baseColors.slice(0, count);
+    }
+
     const colors = [...baseColors];
-    while (colors.length < count) {
-        const hue = (colors.length * 137.508) % 360;
-        const saturation = 65 + (colors.length % 3) * 10;
-        const lightness = 60 + (colors.length % 4) * 5;
+    const goldenAngle = 137.508;
+
+    for (let i = baseColors.length; i < count; i++) {
+        // 使用黄金角分割确保颜色分布均匀
+        const hue = (i * goldenAngle) % 360;
+        // 动态调整饱和度和亮度，避免相邻颜色过于相似
+        const saturation = 50 + (i % 5) * 10;
+        const lightness = 55 + ((i * 7) % 4) * 5;
         colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
-    return colors.slice(0, count);
+
+    return colors;
 }
 
 
