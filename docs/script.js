@@ -2,6 +2,9 @@
 const WORKFLOW_FILE_NAME = 'run_script.yml';
 const CONFIG_FILE_PATH = 'config.ini';
 const TOKEN_STORAGE_KEY = 'github_pat';
+const VISIBILITY_STORAGE_KEY = 'total_asset_visibility';
+let isTotalAssetVisible = true;
+let currentTotalAssetValueString = null; // 用于存储加载到的真实资产数值字符串
 let fileSha = null;
 let token = '';
 let originalIniLines = [];
@@ -45,12 +48,15 @@ const historyModal = {
 };
 const totalValueDisplay = document.getElementById('total-value-display');
 const returnsDisplayContainer = document.getElementById('returns-display');
+// 新增：获取可见性切换按钮
+const toggleVisibilityBtn = document.getElementById('toggle-visibility-btn');
 
 // --- 初始化与事件监听 ---
 document.addEventListener('DOMContentLoaded', () => {
     loadInitialSummary();
     setupEventListeners();
     initializeAuth();
+    initializeAssetVisibility();
 });
 
 function setupEventListeners() {
@@ -73,6 +79,61 @@ function setupEventListeners() {
     // 历史表格弹窗的事件监听
     totalValueDisplay.addEventListener('click', showHistoryTable);
     historyModal.backdrop.addEventListener('click', hideHistoryTable);
+
+    toggleVisibilityBtn.addEventListener('click', toggleAssetVisibility);
+}
+
+// ========== 新增：总资产可见性功能函数 ==========
+
+/**
+ * 从 localStorage 初始化总资产的可见性状态
+ */
+function initializeAssetVisibility() {
+    const savedState = localStorage.getItem(VISIBILITY_STORAGE_KEY);
+    // 如果没有保存过状态，或状态为 'visible'，则默认为可见
+    isTotalAssetVisible = savedState === 'hidden' ? false : true;
+    // 页面加载时，仅更新图标状态，文本内容等待数据加载后更新
+    updateAssetVisibilityIcon();
+}
+
+/**
+ * 切换总资产的可见性，并保存状态到 localStorage
+ */
+function toggleAssetVisibility() {
+    isTotalAssetVisible = !isTotalAssetVisible;
+    localStorage.setItem(VISIBILITY_STORAGE_KEY, isTotalAssetVisible ? 'visible' : 'hidden');
+    // 更新显示（包括文本和图标）
+    updateAssetDisplay();
+}
+
+/**
+ * 根据当前的可见性状态，更新显示内容（文本和图标）
+ */
+function updateAssetDisplay() {
+    updateAssetVisibilityIcon(); // 首先更新图标
+
+    // 仅当真实资产数值已加载时，才更新文本内容
+    if (currentTotalAssetValueString) {
+        if (isTotalAssetVisible) {
+            totalValueDisplay.textContent = `总资产：${currentTotalAssetValueString}`;
+        } else {
+            totalValueDisplay.textContent = '总资产：******';
+        }
+    }
+    // 如果数值还未加载（currentTotalAssetValueString 为 null），则文本保持“正在加载...”不变
+}
+
+/**
+ * 根据可见性状态，只更新眼睛图标的样式
+ */
+function updateAssetVisibilityIcon() {
+    if (isTotalAssetVisible) {
+        toggleVisibilityBtn.classList.remove('fa-eye-slash');
+        toggleVisibilityBtn.classList.add('fa-eye');
+    } else {
+        toggleVisibilityBtn.classList.remove('fa-eye');
+        toggleVisibilityBtn.classList.add('fa-eye-slash');
+    }
 }
 
 // ========== 饼图相关函数 ==========
@@ -1264,12 +1325,16 @@ async function loadInitialSummary() {
         const latestTotalValue = parseFloat(latestDataLine[totalValueIndex]);
         if (isNaN(latestTotalValue)) throw new Error('最新的 "total_value" 无效。');
 
-        totalValueDisplay.textContent = `总资产：$${latestTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        currentTotalAssetValueString = `$${latestTotalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        updateAssetDisplay();
         lastUpdatedTime.textContent = latestDataLine[dateIndex];
 
     } catch (error) {
         console.error('加载资产概览失败:', error);
         totalValueDisplay.textContent = '总资产：加载失败';
+        // 如果加载失败，也应用隐藏逻辑
+        currentTotalAssetValueString = '加载失败';
+        updateAssetDisplay();
         totalValueDisplay.style.color = 'red';
     }
 }

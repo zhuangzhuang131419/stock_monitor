@@ -96,17 +96,41 @@ body.modal-open {
 }
 
 /* --- 资产概览 (渐变文字) --- */
+/* 新增：总资产容器样式 */
+.total-value-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin: 20px 0 40px 0; /* 将外边距从 #total-value-display 移到这里 */
+}
+
 #total-value-display {
     font-size: 56px;
     font-weight: 700;
-    text-align: center;
-    margin: 20px 0 40px 0;
+    /* 修改：移除 text-align 和 margin */
+    margin: 0;
     background: linear-gradient(90deg, #84fab0, #8fd3f4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-fill-color: transparent;
 }
+
+/* 新增：资产可见性切换按钮样式 */
+#toggle-visibility-btn {
+    font-size: 28px;
+    color: var(--secondary-text);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 5px;
+}
+
+#toggle-visibility-btn:hover {
+    color: var(--accent-color);
+    transform: scale(1.1);
+}
+
 .clickable-summary {
     cursor: pointer;
     user-select: none;
@@ -409,6 +433,8 @@ input.invalid { border-color: var(--negative-color) !important; background-color
     .returns-container { flex-wrap: wrap; gap: 15px; }
     .return-item { flex: 1 1 130px; }
     #total-value-display { font-size: 42px; }
+    /* 新增：在小屏幕上调整图标大小 */
+    #toggle-visibility-btn { font-size: 24px; }
 }
 
 /* --- 全局操作按钮 --- */

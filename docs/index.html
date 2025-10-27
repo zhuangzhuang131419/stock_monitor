@@ -31,7 +31,12 @@
             <!-- 资产概览面板 -->
             <div id="summary-panel" class="tab-panel active">
                 <div id="summary-container">
-                    <p id="total-value-display" class="clickable-summary">总资产：正在加载...</p>
+                    <!-- 修改开始：将 p 标签包裹在 div 中，并添加图标 -->
+                    <div class="total-value-container">
+                        <p id="total-value-display" class="clickable-summary">总资产：正在加载...</p>
+                        <i id="toggle-visibility-btn" class="fas fa-eye" title="切换资产可见性"></i>
+                    </div>
+                    <!-- 修改结束 -->
 
                     <!-- 收益率展示容器 -->
                     <div id="returns-display" class="returns-container">
