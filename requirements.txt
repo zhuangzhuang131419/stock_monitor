@@ -4,3 +4,5 @@ matplotlib
 numpy
 yfinance
 urllib3
+pytz
+DateTime

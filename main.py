@@ -11,9 +11,30 @@ import matplotlib.patheffects as path_effects
 import yfinance as yf
 import urllib3
 from datetime import datetime
+import pytz
 
 # 禁用在代理模式下可能出现的 InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ==============================================================================
+# 全局时区设置 - 美东时区 (ET)
+# ==============================================================================
+ET_TIMEZONE = pytz.timezone('America/New_York')
+
+
+def get_et_now():
+    """获取当前美东时间"""
+    return datetime.now(ET_TIMEZONE)
+
+
+def get_et_date_string():
+    """获取当前美东日期字符串 (YYYY-MM-DD)"""
+    return get_et_now().strftime('%Y-%m-%d')
+
+
+def get_et_datetime_string():
+    """获取当前美东日期时间字符串 (YYYY-MM-DD HH:MM:SS ET)"""
+    return get_et_now().strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
 # ==============================================================================
@@ -57,33 +78,32 @@ def load_config():
             for key, quantity_str in config.items('OptionsPortfolio'):
                 try:
                     parts = key.upper().rsplit('_', 2)
-                    if len(parts) != 3: continue
+                    if len(parts) != 3:
+                        continue
                     base, strike_str, opt_type = parts
                     date_parts = base.rsplit('_', 1)
-                    if len(date_parts) != 2: continue
+                    if len(date_parts) != 2:
+                        continue
                     ticker, date_str = date_parts
-                    if opt_type not in ['CALL', 'PUT']: continue
+                    if opt_type not in ['CALL', 'PUT']:
+                        continue
                     option_details = {
-                        'key': key.upper(), 'ticker': ticker, 'expiry': date_str,
-                        'strike': float(strike_str), 'type': opt_type, 'quantity': float(quantity_str)
+                        'key': key.upper(),
+                        'ticker': ticker,
+                        'expiry': date_str,
+                        'strike': float(strike_str),
+                        'type': opt_type,
+                        'quantity': float(quantity_str)
                     }
                     options_portfolio.append(option_details)
                 except Exception:
                     print(f"警告: 无法解析期权 '{key}'。")
 
-        # [Proxy]
-        proxy_ip = config.get('Proxy', 'ip', fallback=None)
-        proxy_port = config.get('Proxy', 'port', fallback=None)
-        if proxy_ip and proxy_port:
-            proxy_port = int(proxy_port)
-        else:
-            proxy_ip, proxy_port = None, None
-
         # [Cash]
         cash_amount = config.getfloat('Cash', 'amount', fallback=0.0)
 
         return (data_source, api_key, history_file, plot_file, pie_chart_file,
-                max_retries, retry_delay, portfolio, options_portfolio, proxy_ip, proxy_port, cash_amount)
+                max_retries, retry_delay, portfolio, options_portfolio, cash_amount)
 
     except (configparser.NoSectionError, configparser.NoOptionError, ValueError) as e:
         print(f"错误: 配置文件 'config.ini' 格式不正确或缺少必要项: {e}")
@@ -92,14 +112,17 @@ def load_config():
 
 # 在程序开始时加载所有配置
 (DATA_SOURCE, API_KEY, HISTORY_FILE, PLOT_FILE, PIE_CHART_FILE, MAX_RETRIES,
- RETRY_DELAY, portfolio, options_portfolio, PROXY_IP, PROXY_PORT, CASH_AMOUNT) = load_config()
+ RETRY_DELAY, portfolio, options_portfolio, CASH_AMOUNT) = load_config()
 
 
 # ==============================================================================
-# 2. 获取资产价格的核心函数
+# 2. 获取资产价格的核心函数 (重构版 - 支持盘前盘后 + 美东时区)
 # ==============================================================================
 
 def get_stock_price_alphavantage(ticker):
+    """
+    使用 Alpha Vantage API 获取股票价格
+    """
     av_ticker = ticker.replace('-', '.')
     print(f"  - [AlphaVantage] 正在获取 {av_ticker}...")
     url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={av_ticker}&apikey={API_KEY}'
@@ -123,83 +146,148 @@ def get_stock_price_alphavantage(ticker):
 
 
 def get_stock_price_yfinance(ticker):
+    """
+    获取股票价格的改进版本，智能判断市场状态。
+    支持盘前、盘中、盘后价格，所有时间基于美东时区。
+    """
     yf_ticker = ticker.replace('.', '-')
+    price_type = "未知"
+    price = None
+    trading_day = None
+
+    # ===== 第一步：尝试从 info 获取实时价格 =====
     try:
-        print(f"  - [yfinance-直连] 正在获取 {yf_ticker}...")
+        print(f"  - [yfinance-info] 正在获取 {yf_ticker} 的实时报价...")
+        stock = yf.Ticker(yf_ticker)
+        info = stock.info
+
+        # 获取市场状态
+        market_state = info.get('marketState', 'CLOSED')  # 可能值: PRE, REGULAR, POST, CLOSED
+        print(f"    -> 市场状态: {market_state}")
+
+        # 根据市场状态智能选择价格
+        if market_state == 'PRE':
+            # 盘前时段：优先使用盘前价格
+            price = info.get('preMarketPrice')
+            price_type = "盘前价"
+            # 使用盘前时间对应的交易日
+            pre_market_time = info.get('preMarketTime')
+            if pre_market_time:
+                trading_day = datetime.fromtimestamp(pre_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
+
+        elif market_state == 'REGULAR':
+            # 盘中时段：使用常规市价
+            price = info.get('regularMarketPrice') or info.get('currentPrice')
+            price_type = "盘中价"
+            regular_market_time = info.get('regularMarketTime')
+            if regular_market_time:
+                trading_day = datetime.fromtimestamp(regular_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
+
+        elif market_state == 'POST':
+            # 盘后时段：优先使用盘后价格
+            price = info.get('postMarketPrice')
+            price_type = "盘后价"
+            post_market_time = info.get('postMarketTime')
+            if post_market_time:
+                trading_day = datetime.fromtimestamp(post_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
+
+        # 兜底逻辑：如果上述都没获取到价格
+        if price is None:
+            price = (info.get('regularMarketPrice') or
+                     info.get('previousClose') or
+                     info.get('currentPrice'))
+            price_type = "最近价格"
+            # 使用 regularMarketTime 或当前美东日期
+            regular_market_time = info.get('regularMarketTime')
+            if regular_market_time:
+                trading_day = datetime.fromtimestamp(regular_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
+            else:
+                trading_day = get_et_date_string()
+
+        if price is not None and trading_day is None:
+            # 最后的保险：如果有价格但没日期
+            trading_day = get_et_date_string()
+
+        if price is not None:
+            print(f"  - [yfinance-info] 成功获取 {yf_ticker} ({price_type}, 市场状态: {market_state})")
+            return price, trading_day
+
+    except Exception as e:
+        print(f"  - [yfinance-info] 获取实时报价失败: {e}。将尝试备用方案。")
+
+    # ===== 第二步：备用方案 - 使用 history 获取最近收盘价 =====
+    print(f"  - [yfinance-history] 正在获取 {yf_ticker} 的最近收盘价...")
+    try:
         stock = yf.Ticker(yf_ticker)
         hist = stock.history(period='5d', auto_adjust=True)
-        if hist.empty: raise ConnectionError(f"返回了空数据 (可能是无效代码: {yf_ticker})")
-        last_trade = hist.iloc[-1]
-        price = last_trade['Close']
-        trading_day = last_trade.name.strftime('%Y-%m-%d')
-        return price, trading_day
-    except Exception as e:
-        print(f"  - [yfinance-直连] 失败: {e}")
-        if not PROXY_IP or not PROXY_PORT: return None
-        print(f"  - [yfinance-代理] 正在通过 {PROXY_IP}:{PROXY_PORT} 尝试...")
-        try:
-            stock = yf.Ticker(yf_ticker)
-            proxy_url = f"http://{PROXY_IP}:{PROXY_PORT}"
-            hist = stock.history(period='5d', auto_adjust=True, proxy=proxy_url)
-            # --- 修改结束 ---
 
-            if hist.empty: raise ConnectionError("通过代理仍返回空数据。")
-            last_trade = hist.iloc[-1];
-            price = last_trade['Close']
-            trading_day = last_trade.name.strftime('%Y-%m-%d')
-            return price, trading_day
-        except Exception as e_proxy:
-            print(f"  - [yfinance-代理] 失败: {e_proxy}")
-            return None
+        if hist.empty:
+            raise ConnectionError(f"备用方案也返回了空数据 (可能是无效代码: {yf_ticker})")
+
+        last_trade = hist.iloc[-1]
+        price = float(last_trade['Close'])
+
+        # 将时间戳转换为美东时区日期
+        if last_trade.name.tzinfo is None:
+            # 如果没有时区信息，假设是UTC
+            trading_day = last_trade.name.tz_localize('UTC').tz_convert(ET_TIMEZONE).strftime('%Y-%m-%d')
+        else:
+            trading_day = last_trade.name.tz_convert(ET_TIMEZONE).strftime('%Y-%m-%d')
+
+        price_type = "最近收盘价"
+        print(f"  - [yfinance-history] 成功获取 {yf_ticker} ({price_type})")
+        return price, trading_day
+
+    except Exception as e_fallback:
+        print(f"  - [yfinance-history] 失败: {e_fallback}")
+        return None
 
 
 def get_option_price_yfinance(ticker, expiry, strike_price, option_type):
+    """
+    使用 yfinance 获取期权价格
+    所有时间基于美东时区
+    """
     option_name = f"{ticker} {expiry} {strike_price} {option_type}"
+
     try:
-        print(f"  - [yfinance-直连] 正在获取期权 {option_name}...")
+        print(f"  - [yfinance-option] 正在获取期权 {option_name}...")
         stock = yf.Ticker(ticker)
         chain = stock.option_chain(expiry)
         df = chain.calls if option_type == 'CALL' else chain.puts
-        if df.empty: raise ValueError(f"未找到 {expiry} 的 {option_type} 期权链")
+
+        if df.empty:
+            raise ValueError(f"未找到 {expiry} 的 {option_type} 期权链")
+
         contract = df[df['strike'] == strike_price]
-        if contract.empty: raise ValueError(f"未找到行权价为 {strike_price} 的合约")
-        price = contract.iloc[0]['lastPrice']
-        trading_day = datetime.now().strftime('%Y-%m-%d')
+        if contract.empty:
+            raise ValueError(f"未找到行权价为 {strike_price} 的合约")
+
+        price = float(contract.iloc[0]['lastPrice'])
+        # 期权价格使用当前美东日期
+        trading_day = get_et_date_string()
+
+        print(f"  - [yfinance-option] 成功获取期权 {option_name}")
         return price, trading_day
+
     except Exception as e:
-        print(f"  - [yfinance-直连] 失败: {e}")
-        if not PROXY_IP or not PROXY_PORT: return None
-        print(f"  - [yfinance-代理] 正在通过 {PROXY_IP}:{PROXY_PORT} 尝试...")
-        try:
-            proxies = {'http': f'http://{PROXY_IP}:{PROXY_PORT}', 'https': f'http://{PROXY_IP}:{PROXY_PORT}'}
-            session = requests.Session();
-            session.proxies.update(proxies);
-            session.verify = False
-            stock = yf.Ticker(ticker, session=session)
-            chain = stock.option_chain(expiry)
-            df = chain.calls if option_type == 'CALL' else chain.puts
-            if df.empty: raise ValueError(f"通过代理仍未找到 {expiry} 的 {option_type} 期权链")
-            contract = df[df['strike'] == strike_price]
-            if contract.empty: raise ValueError(f"通过代理仍未找到行权价为 {strike_price} 的合约")
-            price = contract.iloc[0]['lastPrice']
-            trading_day = datetime.now().strftime('%Y-%m-%d')
-            return price, trading_day
-        except Exception as e_proxy:
-            print(f"  - [yfinance-代理] 失败: {e_proxy}")
-            return None
+        print(f"  - [yfinance-option] 失败: {e}")
+        return None
 
 
 # ==============================================================================
-# (智能版) 4.2. 核心函数：获取股票/期权的历史价格
+# 3. 获取历史价格函数 (基于美东时区)
 # ==============================================================================
+
 def get_historical_stock_price(ticker, target_date):
     """
     获取给定资产在特定日期的收盘价。
-    该函数现在可以智能处理股票和期权两种代码。
+    智能处理股票和期权两种代码。
+    所有日期基于美东时区。
     """
     api_ticker = ticker.replace('.', '-')
 
-    # --- 新增：智能识别并转换期权代码 ---
+    # --- 智能识别并转换期权代码 ---
     if '_' in ticker:
         print(f"    -> 检测到期权代码 '{ticker}'，正在转换为yfinance格式...")
         try:
@@ -225,8 +313,8 @@ def get_historical_stock_price(ticker, target_date):
         except Exception as e:
             print(f"    -> 错误: 转换期权代码 '{ticker}' 失败: {e}")
             return None
-    # --- 期权转换逻辑结束 ---
 
+    # --- 获取历史数据 ---
     try:
         stock = yf.Ticker(api_ticker)
 
@@ -239,50 +327,65 @@ def get_historical_stock_price(ticker, target_date):
         if not hist.empty:
             # 优先使用 'Close'，如果不存在，则使用 'close'
             if 'Close' in hist.columns:
-                return hist['Close'].iloc[0]
+                return float(hist['Close'].iloc[0])
             elif 'close' in hist.columns:
-                return hist['close'].iloc[0]
+                return float(hist['close'].iloc[0])
             else:
                 print(f"    -> 警告: 在 {target_date} 的数据中找不到 'Close' 或 'close' 列。")
                 return None
         else:
             print(f"    -> 警告: yfinance未能返回 {api_ticker} 在 {target_date} 的任何数据。")
+
             # 尝试获取期权的info，对于某些情况可能有效
             if '_' in ticker:
                 info = stock.info
-                if 'lastPrice' in info:
+                if 'lastPrice' in info and info['lastPrice'] is not None:
                     print("    -> 备用方案: 从info中成功获取 'lastPrice'。")
-                    return info['lastPrice']
+                    return float(info['lastPrice'])
+
             return None
 
     except Exception as e:
-        print(f"HTTP Error 404: {e}")
-        print(f"${api_ticker}: a可能已退市; 未找到时区")
+        print(f"    -> 错误: 获取历史价格失败: {e}")
+        print(f"    -> {api_ticker} 可能已退市或数据不可用")
         return None
 
+
 # ==============================================================================
-# 3. 计算总价值并收集价格
+# 4. 计算总价值并收集价格 (基于美东时区)
 # ==============================================================================
+
 def calculate_portfolio_value():
     """
     计算总价值，并同时收集每个资产的 (总价值, 单价) 元组。
+    所有日期基于美东时区。
     """
     total_value = 0.0
     asset_details = {}  # 将存储 (总价值, 单价) 的元组
     portfolio_date = None
     source_name = "yfinance" if DATA_SOURCE == 0 else "Alpha Vantage"
 
+    print(f"\n{'=' * 70}")
+    print(f"开始计算投资组合价值")
+    print(f"当前美东时间: {get_et_datetime_string()}")
+    print(f"{'=' * 70}\n")
     print(f"正在使用 [{source_name}] 获取您的股票价值...\n")
+
+    # ===== 处理股票 =====
     for ticker, quantity in portfolio:
         price, fetched_date = 0.0, None
         result = None
+
         for attempt in range(MAX_RETRIES):
             get_price_func = get_stock_price_yfinance if DATA_SOURCE == 0 else get_stock_price_alphavantage
             result = get_price_func(ticker)
+
             if result:
                 price, fetched_date = result
-                if portfolio_date is None: portfolio_date = fetched_date
+                if portfolio_date is None:
+                    portfolio_date = fetched_date
                 break
+
             if attempt < MAX_RETRIES - 1:
                 print(f"  - 获取 {ticker} 失败。将在 {RETRY_DELAY} 秒后重试...")
                 time.sleep(RETRY_DELAY)
@@ -290,22 +393,29 @@ def calculate_portfolio_value():
         stock_value = price * quantity
         asset_details[ticker] = (stock_value, price)
         total_value += stock_value
-        if result:
-            print(f"  -> 成功: {ticker} {quantity:g} 股 @ ${price:.2f} = ${stock_value:,.2f}")
-        else:
-            print(f"  -> 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {ticker} 的价格。价值记为0。")
 
+        if result:
+            print(f"  -> ✓ 成功: {ticker} {quantity:g} 股 @ ${price:.2f} = ${stock_value:,.2f}")
+        else:
+            print(f"  -> ✗ 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {ticker} 的价格。价值记为0。")
+
+    # ===== 处理期权 =====
     if DATA_SOURCE == 0 and options_portfolio:
         print("\n正在使用 [yfinance] 获取您的期权价值...\n")
+
         for opt in options_portfolio:
             price, fetched_date = 0.0, None
             result = None
+
             for attempt in range(MAX_RETRIES):
                 result = get_option_price_yfinance(opt['ticker'], opt['expiry'], opt['strike'], opt['type'])
+
                 if result:
                     price, fetched_date = result
-                    if portfolio_date is None: portfolio_date = fetched_date
+                    if portfolio_date is None:
+                        portfolio_date = fetched_date
                     break
+
                 if attempt < MAX_RETRIES - 1:
                     print(f"  - 获取 {opt['key']} 失败。将在 {RETRY_DELAY} 秒后重试...")
                     time.sleep(RETRY_DELAY)
@@ -313,45 +423,49 @@ def calculate_portfolio_value():
             option_value = price * opt['quantity'] * 100
             asset_details[opt['key']] = (option_value, price)
             total_value += option_value
-            if result:
-                print(f"  -> 成功: {opt['key']} {opt['quantity']:g} 张 @ ${price:.2f} = ${option_value:,.2f}")
-            else:
-                print(f"  -> 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {opt['key']} 的价格。价值记为0。")
 
-    # ==========================================================================
-    # VVVVVV  修改这里 VVVVVV
-    # 无论现金是否为0，都将其作为一个资产类别进行记录，确保价格始终为1.0
+            if result:
+                print(f"  -> ✓ 成功: {opt['key']} {opt['quantity']:g} 张 @ ${price:.2f} = ${option_value:,.2f}")
+            else:
+                print(f"  -> ✗ 错误: 经过 {MAX_RETRIES} 次尝试后，仍无法获取 {opt['key']} 的价格。价值记为0。")
+
+    # ===== 处理现金 =====
     asset_details['CASH'] = (CASH_AMOUNT, 1.0)
     total_value += CASH_AMOUNT
-    # 仅在现金大于0时打印提示信息，避免混淆
+
     if CASH_AMOUNT > 0:
         print(f"\n计入现金余额: ${CASH_AMOUNT:,.2f}")
-    # ^^^^^^  修改这里 ^^^^^^
-    # ==========================================================================
 
-    print("\n" + "=" * 50)
-    print(f"投资组合总价值 (截至 {portfolio_date or '未知日期'}): ${total_value:,.2f}")
-    print("=" * 50)
+    # 如果没有获取到任何日期，使用当前美东日期
+    if portfolio_date is None:
+        portfolio_date = get_et_date_string()
+        print(f"\n提示: 未能从API获取交易日期，使用当前美东日期: {portfolio_date}")
+
+    print("\n" + "=" * 70)
+    print(f"投资组合总价值 (截至 {portfolio_date}): ${total_value:,.2f}")
+    print("=" * 70)
+
     return total_value, asset_details, portfolio_date
 
 
 # ==============================================================================
-# 4. 将历史数据保存到文件 (分隔符更新版)
+# 5. 保存历史数据 (基于美东时区)
 # ==============================================================================
+
 def save_history(date_to_save, value_to_save, asset_details):
     """
     将当日的投资组合详情追加或更新到历史记录CSV文件中。
-    - 每个资产单元格现在存储一个字符串形式的元组: '(总价值|单价)'
+    每个资产单元格存储格式: '(总价值|单价)'
+    所有日期基于美东时区。
     """
-    # 1. 准备当日的新数据行，将元组格式化为字符串
+    # 1. 准备当日的新数据行
     new_row_data = {'total_value': f"{value_to_save:.2f}"}
     for asset, (val, price) in asset_details.items():
-        # 改动点: 分隔符从 ',' 变为 '|'
         new_row_data[asset] = f"({val:.2f}|{price:.2f})"
 
     new_row = pd.Series(new_row_data, name=date_to_save)
 
-    # 2. 读取现有数据，确保所有内容都作为对象（字符串）处理
+    # 2. 读取现有数据
     if os.path.exists(HISTORY_FILE) and os.path.getsize(HISTORY_FILE) > 0:
         try:
             df = pd.read_csv(HISTORY_FILE, index_col='date', dtype=str)
@@ -371,11 +485,10 @@ def save_history(date_to_save, value_to_save, asset_details):
     df = pd.concat([df, new_row.to_frame().T])
 
     # 5. 用代表0的元组字符串填充新出现的NaN值
-    # 改动点: 分隔符从 ',' 变为 '|'
     df.fillna("(0.00|0.00)", inplace=True)
+
     # total_value列的NaN用 '0.00' 填充
     if 'total_value' in df.columns:
-        # 改动点: 分隔符从 ',' 变为 '|'
         df['total_value'].replace("(0.00|0.00)", "0.00", inplace=True)
 
     # 6. 重新排序列
@@ -385,49 +498,52 @@ def save_history(date_to_save, value_to_save, asset_details):
         final_cols = ['total_value'] + cols
         df = df[final_cols]
 
-    # 7. 保存
+    # 7. 保存（按日期降序排列）
     df.sort_index(ascending=False, inplace=True)
     df.to_csv(HISTORY_FILE, index=True, index_label='date')
     print(f"历史记录已成功更新到: {HISTORY_FILE}")
 
 
 # ==============================================================================
-# 5. 绘制历史价值图表 (分隔符更新版)
+# 6. 数据解析辅助函数
 # ==============================================================================
+
 def parse_value_from_cell(cell):
     """
-    手动解析单元格的函数，不使用ast。
+    手动解析单元格的函数。
     能处理 '(价值|价格)' 格式和纯数字格式。
     """
     try:
-        # 检查是否为字符串以及是否符合元组格式
         if isinstance(cell, str) and cell.strip().startswith('(') and cell.strip().endswith(')'):
-            # 去除括号并按管道符分割
-            # 改动点: 分隔符从 ',' 变为 '|'
             parts = cell.strip()[1:-1].split('|')
             if len(parts) == 2:
-                # 提取第一个部分（总价值）并转换为浮点数
                 return float(parts[0].strip())
             else:
                 return 0.0
-        # 如果不是元组格式的字符串，尝试直接转换为浮点数（兼容旧格式）
         return float(cell)
     except (ValueError, TypeError, AttributeError):
-        # 如果转换失败（例如，空字符串或格式错误），返回0
         return 0.0
 
 
+# ==============================================================================
+# 7. 绘制历史价值图表
+# ==============================================================================
+
 def plot_history_graph(output_filename):
+    """
+    绘制投资组合历史价值堆叠图
+    """
     if not os.path.exists(HISTORY_FILE):
         print("找不到历史数据文件，无法绘制图表。")
         return
 
-    # 读取原始数据，不立即转换
+    print(f"\n正在生成历史趋势图...")
+
+    # 读取原始数据
     df_raw = pd.read_csv(HISTORY_FILE, index_col='date', parse_dates=True)
     df_raw.sort_index(inplace=True)
 
-    # 创建一个用于绘图的、只包含数值的DataFrame
-    # *** 此处已根据您的反馈，将 applymap 替换为 map ***
+    # 创建用于绘图的数值DataFrame
     df_plot = df_raw.map(parse_value_from_cell)
 
     if len(df_plot) < 1:
@@ -437,7 +553,7 @@ def plot_history_graph(output_filename):
     asset_columns = [col for col in df_plot.columns if col != 'total_value']
     positive_assets = df_plot[asset_columns].clip(lower=0)
 
-    # 计算每个日期的累积值，用于定位标签
+    # 计算累积值，用于定位标签
     df_cum = positive_assets.cumsum(axis=1)
 
     fig, ax = plt.subplots(figsize=(16, 9))
@@ -447,56 +563,60 @@ def plot_history_graph(output_filename):
     ax.stackplot(df_plot.index, positive_assets.T, labels=asset_columns, colors=colors)
 
     # 绘制总价值曲线
-    ax.plot(df_plot.index, df_plot['total_value'], color='black', linewidth=2.5, linestyle='--', label='Total Value')
+    ax.plot(df_plot.index, df_plot['total_value'], color='black', linewidth=2.5,
+            linestyle='--', label='Total Value')
 
-    # --- 在每个色块的起始位置添加标签 ---
+    # 在每个色块的起始位置添加标签
     text_effect = [path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()]
     for col in asset_columns:
         col_data = positive_assets[col]
-        # 寻找该资产第一次出现（值不为0）的日期索引
         first_occurrence_index = col_data.ne(0).idxmax()
 
-        # 如果整个列都是0，idxmax会返回第一个索引，需要额外检查该点的值是否也为0
         if pd.isna(first_occurrence_index) or col_data.loc[first_occurrence_index] == 0:
-            continue  # 如果该列全为0或找不到，则跳过
+            continue
 
-        # 计算标签的Y坐标：位于该色块垂直方向的中心
-        # Y = (下方所有色块的高度) + (当前色块高度的一半)
         y_base = df_cum.loc[first_occurrence_index, col] - col_data.loc[first_occurrence_index]
         y_pos = y_base + 0.5 * col_data.loc[first_occurrence_index]
 
-        # 添加文本
-        ax.text(first_occurrence_index, y_pos, col, color='white', ha='left', va='center', fontsize=10,
-                path_effects=text_effect, fontweight='bold')
+        ax.text(first_occurrence_index, y_pos, col, color='white', ha='left', va='center',
+                fontsize=10, path_effects=text_effect, fontweight='bold')
 
-    ax.set_title('Portfolio Value Over Time', fontsize=20, pad=20)
+    ax.set_title('Portfolio Value Over Time (ET)', fontsize=20, pad=20)
     ax.set_ylabel('Value ($)', fontsize=14)
-    ax.set_xlabel('Date', fontsize=14)
+    ax.set_xlabel('Date (ET)', fontsize=14)
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('$%1.0f'))
+
     if not df_plot.index.empty:
         ax.set_xlim(df_plot.index[0], df_plot.index[-1])
+
     ax.axhline(0, color='black', linewidth=0.5)
     plt.xticks(rotation=45)
     plt.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0)
     plt.tight_layout()
+
     try:
         plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-        print(f"\n成功: 历史趋势图已保存到 '{output_filename}'")
+        print(f"✓ 成功: 历史趋势图已保存到 '{output_filename}'")
     except Exception as e:
-        print(f"\n错误: 保存历史趋势图时出错: {e}")
+        print(f"✗ 错误: 保存历史趋势图时出错: {e}")
     finally:
         plt.close(fig)
 
 
 # ==============================================================================
-# 6. 绘制当日仓位饼图 (实现实心饼图和内部标签)
+# 8. 绘制当日仓位饼图
 # ==============================================================================
-def plot_pie_chart(asset_details, output_filename):
-    print(f"正在生成当日仓位饼图...")
 
-    # 从 asset_details 中提取价值 > 0 的资产用于绘图
+def plot_pie_chart(asset_details, output_filename):
+    """
+    绘制当日资产配置饼图
+    """
+    print(f"\n正在生成当日仓位饼图...")
+
+    # 提取价值 > 0 的资产
     asset_values = {k: v[0] for k, v in asset_details.items() if v[0] > 0}
+
     if not asset_values:
         print("没有正价值的持仓可用于生成饼图。")
         return
@@ -507,31 +627,27 @@ def plot_pie_chart(asset_details, output_filename):
 
     fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(aspect="equal"))
 
-    # 绘制饼图，但不自动生成标签
+    # 绘制饼图
     wedges, texts = ax.pie(sizes,
                            startangle=90,
                            colors=plt.cm.viridis(np.linspace(0, 1, len(labels))),
-                           radius=1.2)  # 稍微增大半径以容纳标签
+                           radius=1.2)
 
-    ax.set_title('Positive Asset Composition (Today)', fontsize=20, pad=20)
+    ax.set_title(f'Asset Composition (ET: {get_et_date_string()})', fontsize=20, pad=20)
 
-    # --- 自定义内部标签 ---
+    # 自定义内部标签
     text_effect = [path_effects.Stroke(linewidth=3, foreground='black'), path_effects.Normal()]
     for i, wedge in enumerate(wedges):
-        # 计算标签位置
         angle = (wedge.theta1 + wedge.theta2) / 2.
         x = wedge.r * 0.7 * np.cos(np.deg2rad(angle))
         y = wedge.r * 0.7 * np.sin(np.deg2rad(angle))
 
-        # 准备标签文本
         percent = sizes[i] / total_size * 100
         label_text = f"{labels[i]}\n{percent:.1f}%"
 
-        # 如果扇区太小，只显示百分比以避免重叠
         if percent < 4:
             label_text = f"{percent:.1f}%"
 
-        # 添加文本
         ax.text(x, y, label_text,
                 ha='center', va='center',
                 color='white', fontsize=10,
@@ -539,26 +655,28 @@ def plot_pie_chart(asset_details, output_filename):
 
     try:
         plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-        print(f"成功: 当日仓位饼图已保存到 '{output_filename}'")
+        print(f"✓ 成功: 当日仓位饼图已保存到 '{output_filename}'")
     except Exception as e:
-        print(f"\n错误: 保存仓位饼图时出错: {e}")
+        print(f"✗ 错误: 保存仓位饼图时出错: {e}")
     finally:
         plt.close(fig)
 
 
 # ==============================================================================
-# (终极版) 6.1. 历史数据校验与修复模块 (分隔符更新+清仓清理版)
+# 9. 历史数据校验与修复模块 (基于美东时区)
 # ==============================================================================
+
 def validate_and_repair_history():
     """
     校验并修复历史数据，并清理已售罄的资产列。
-    使用 '|' 作为分隔符。
+    所有日期操作基于美东时区。
     """
     if not os.path.exists(HISTORY_FILE):
         return
 
-    print("\n" + "=" * 50)
-    print("开始执行历史数据完整性校验 (使用 '|' 分隔符)...")
+    print("\n" + "=" * 70)
+    print("开始执行历史数据完整性校验...")
+    print("=" * 70)
 
     try:
         df = pd.read_csv(HISTORY_FILE, index_col='date', dtype=str)
@@ -569,35 +687,38 @@ def validate_and_repair_history():
     df_repaired = df.copy()
     changes_made = False
 
-    # --- 数据修复循环 (代码与之前相同，此处省略) ---
+    # 数据修复循环
     for date, row in df.iterrows():
         for ticker, cell_value in row.items():
             if ticker == 'total_value' or pd.isna(cell_value):
                 continue
-            # (此处省略现金、期权、股票的详细修复逻辑，因为它们没有变化)
-            # ...
+
             # -------------------- 1. 现金 (CASH) 处理逻辑 --------------------
             if ticker == 'CASH':
                 try:
                     is_tuple_format = isinstance(cell_value, str) and cell_value.strip().startswith('(')
                     cash_amount = 0.0
                     needs_fixing = False
+
                     if is_tuple_format:
                         parts = cell_value.strip()[1:-1].split('|')
                         cash_amount = float(parts[0].strip())
                         price = float(parts[1].strip()) if len(parts) > 1 else 0.0
-                        if price != 1.0: needs_fixing = True
+                        if price != 1.0:
+                            needs_fixing = True
                     else:
                         cash_amount = float(cell_value)
                         needs_fixing = True
+
                     if needs_fixing:
                         new_cash_value = f"({cash_amount:.2f}|1.00)"
                         if df_repaired.at[date, ticker] != new_cash_value:
                             df_repaired.at[date, ticker] = new_cash_value
                             changes_made = True
-                            print(f"  - 修正 CASH 格式: on {date}. 从 '{cell_value}' -> '{new_cash_value}'")
+                            print(f"  - 修正 CASH 格式: {date} 从 '{cell_value}' -> '{new_cash_value}'")
+
                 except (ValueError, IndexError):
-                    print(f"  - 警告: 无法解析 CASH 单元格 on {date}: '{cell_value}'")
+                    print(f"  - 警告: 无法解析 CASH 单元格 {date}: '{cell_value}'")
                 continue
 
             # -------------------- 2. 期权 (Options) 处理逻辑 --------------------
@@ -611,7 +732,7 @@ def validate_and_repair_history():
                     else:
                         total_val = float(cell_value)
                 except (ValueError, IndexError):
-                    print(f"  - 警告: 无法解析期权单元格 {ticker} on {date}: '{cell_value}'")
+                    print(f"  - 警告: 无法解析期权单元格 {ticker} {date}: '{cell_value}'")
                     continue
 
                 if total_val == 0:
@@ -619,19 +740,21 @@ def validate_and_repair_history():
                     if cell_value.strip() not in ["(0.00|0.00)", "(0.0|0.0)"]:
                         df_repaired.at[date, ticker] = correct_format
                         changes_made = True
-                        print(f"  - 修正零值期权格式: {ticker} on {date}. 从 '{cell_value}' -> '{correct_format}'")
+                        print(f"  - 修正零值期权格式: {ticker} {date} 从 '{cell_value}' -> '{correct_format}'")
+
                 elif total_val > 0 and price <= 0:
-                    print(f"  - 发现不一致期权数据: {ticker} on {date} [价值: {total_val:.2f}, 价格缺失]")
+                    print(f"  - 发现不一致期权数据: {ticker} {date} [价值: {total_val:.2f}, 价格缺失]")
                     print(f"    -> 正在尝试获取 {date} 的历史价格...")
                     historical_price = get_historical_stock_price(ticker, date)
                     time.sleep(1)
+
                     if historical_price is not None:
                         new_cell_value = f"({total_val:.2f}|{historical_price:.2f})"
                         df_repaired.at[date, ticker] = new_cell_value
                         changes_made = True
-                        print(f"    -> 成功修复期权: 价格更新为 ${historical_price:.2f}。新值为: {new_cell_value}")
+                        print(f"    -> ✓ 成功修复期权: 价格更新为 ${historical_price:.2f}")
                     else:
-                        print(f"    -> 修复失败: 未能获取到期权 {ticker} 在 {date} 的历史价格。")
+                        print(f"    -> ✗ 修复失败: 未能获取到期权 {ticker} 在 {date} 的历史价格")
                 continue
 
             # -------------------- 3. 股票 (Stock) 处理逻辑 --------------------
@@ -646,63 +769,80 @@ def validate_and_repair_history():
                         total_val = float(cell_value)
                 except (ValueError, IndexError):
                     continue
+
                 if total_val > 0 and price <= 0:
-                    print(f"  - 发现不一致股票数据: {ticker} on {date} [价值: {total_val:.2f}, 价格缺失]")
+                    print(f"  - 发现不一致股票数据: {ticker} {date} [价值: {total_val:.2f}, 价格缺失]")
                     print(f"    -> 正在尝试获取 {date} 的历史价格...")
                     historical_price = get_historical_stock_price(ticker, date)
                     time.sleep(1)
+
                     if historical_price is not None:
                         new_cell_value = f"({total_val:.2f}|{historical_price:.2f})"
                         df_repaired.at[date, ticker] = new_cell_value
                         changes_made = True
-                        print(f"    -> 成功修复股票: 价格更新为 ${historical_price:.2f}。新值为: {new_cell_value}")
+                        print(f"    -> ✓ 成功修复股票: 价格更新为 ${historical_price:.2f}")
                     else:
-                        print(f"    -> 修复失败: 未能获取到股票 {ticker} 在 {date} 的历史价格。")
+                        print(f"    -> ✗ 修复失败: 未能获取到股票 {ticker} 在 {date} 的历史价格")
 
-    # --- 改动点：新增清理已清仓资产列的逻辑 ---
+    # 清理已清仓资产列
     columns_to_drop = []
     asset_columns = [col for col in df_repaired.columns if col != 'total_value']
 
     for col in asset_columns:
-        # 使用 parse_value_from_cell 函数检查该列所有值的总和是否为0
         try:
-            # .apply() 在这里比 .map() 更安全，因为它作用于 Series
             total_asset_value = df_repaired[col].apply(parse_value_from_cell).sum()
             if total_asset_value == 0:
                 columns_to_drop.append(col)
         except Exception:
-            # 如果解析某列时出错，为安全起见，不删除该列
             continue
 
     if columns_to_drop:
         df_repaired.drop(columns=columns_to_drop, inplace=True)
-        changes_made = True  # 标记已更改，以确保文件被保存
+        changes_made = True
         print(f"\n信息: 检测到并清除了已售罄的资产列: {', '.join(columns_to_drop)}")
-    # --- 清理逻辑结束 ---
 
+    # 保存修复后的数据
     if changes_made:
         print("\n校验完成。发现并修复/清理了数据，正在保存更新后的历史文件...")
         try:
             df_repaired.to_csv(HISTORY_FILE, index=True, index_label='date')
-            print(f"成功: 已将更新后的历史数据保存到 '{HISTORY_FILE}'")
+            print(f"✓ 成功: 已将更新后的历史数据保存到 '{HISTORY_FILE}'")
         except Exception as e:
-            print(f"错误: 保存更新后的历史文件失败: {e}")
+            print(f"✗ 错误: 保存更新后的历史文件失败: {e}")
     else:
         print("\n校验完成。未发现需要修复或清理的数据。")
-    print("=" * 50)
+
+    print("=" * 70)
 
 
 # ==============================================================================
-# 7. 主执行逻辑
+# 10. 主执行逻辑
 # ==============================================================================
+
 if __name__ == "__main__":
+    print("\n" + "=" * 70)
+    print("投资组合追踪系统 (Portfolio Tracker)")
+    print("所有时间基于美东时区 (America/New_York)")
+    print("=" * 70)
+
+    # 计算投资组合价值
     final_total_value, all_asset_details, data_date = calculate_portfolio_value()
 
     if data_date is not None:
+        # 保存历史数据
         save_history(data_date, final_total_value, all_asset_details)
+
+        # 校验和修复历史数据
         validate_and_repair_history()
+
+        # 生成图表
         plot_history_graph(PLOT_FILE)
-        # 饼图函数现在需要 asset_details
         plot_pie_chart(all_asset_details, PIE_CHART_FILE)
+
+        print("\n" + "=" * 70)
+        print(f"✓ 所有任务完成! (美东时间: {get_et_datetime_string()})")
+        print("=" * 70)
     else:
-        print("\n错误: 未能获取到任何有效的交易日期，无法保存和绘图。")
+        print("\n" + "=" * 70)
+        print("✗ 错误: 未能获取到任何有效的交易日期，无法保存和绘图。")
+        print("=" * 70)
