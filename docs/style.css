@@ -855,3 +855,64 @@ input.invalid { border-color: var(--negative-color) !important; background-color
         flex: 1 1 40%; /* Two items per row */
     }
 }
+
+/* ========== 额外指标图表布局 (新布局) ========== */
+
+/* VIX 全宽图表容器 */
+.vix-full-width-container {
+    margin-top: 30px;
+    animation: fadeInUp 0.6s 0.4s ease-out backwards;
+}
+
+/* 强度和宽度图表容器 (并排) */
+.fear-greed-additional-charts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* 两列布局 */
+    gap: 30px;
+    margin-top: 30px;
+    animation: fadeInUp 0.6s 0.6s ease-out backwards; /* 动画延迟，让VIX图先出现 */
+}
+
+/* 统一图表标题样式 */
+.fear-greed-additional-charts .pie-chart-container h3,
+.vix-full-width-container .pie-chart-container h3 {
+    text-align: center;
+    margin: 0 0 20px 0;
+    color: var(--primary-text);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* 为VIX图表设置更高的高度 */
+.vix-full-width-container .chart-canvas-wrapper {
+    height: 350px;
+}
+
+/* 为下面两个图表设置统一高度 */
+.fear-greed-additional-charts .chart-canvas-wrapper {
+    height: 250px;
+}
+
+#stock-strength-chart,
+#stock-breadth-chart,
+#vix-chart {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* 响应式调整：在中等屏幕下，强度和宽度图表变为单列 */
+@media (max-width: 1024px) {
+    .fear-greed-additional-charts {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .fear-greed-additional-charts {
+        gap: 20px;
+    }
+    .fear-greed-additional-charts .pie-chart-container,
+    .vix-full-width-container .pie-chart-container {
+        padding: 20px;
+    }
+}

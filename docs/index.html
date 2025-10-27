@@ -97,6 +97,37 @@
                 </div>
             </div>
             <!-- ========== 新增内容结束 ========== -->
+                        <!-- ========== 新增：额外指标历史图表 (新布局) ========== -->
+        <!-- VIX 全宽图表 -->
+        <div class="vix-full-width-container">
+            <div class="pie-chart-container">
+                <h3 class="chart-title">市场波动率 (VIX)</h3>
+                <div id="vix-rating-badge" class="chart-rating-badge"></div>
+                <div class="chart-canvas-wrapper">
+                    <canvas id="vix-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 强度和宽度并排图表 -->
+        <div class="fear-greed-additional-charts">
+            <div class="pie-chart-container">
+                <h3 class="chart-title">股价强度历史</h3>
+                <div id="strength-rating-badge" class="chart-rating-badge"></div>
+                <div class="chart-canvas-wrapper">
+                    <canvas id="stock-strength-chart"></canvas>
+                </div>
+            </div>
+            <div class="pie-chart-container">
+                <h3 class="chart-title">股价宽度历史</h3>
+                <div id="breadth-rating-badge" class="chart-rating-badge"></div>
+                <div class="chart-canvas-wrapper">
+                    <canvas id="stock-breadth-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        <!-- ========== 新增内容结束 ========== -->
+
 
                 <div class="summary-footer">
                     <p>数据最后更新于 <span id="last-updated-time">...</span></p>

@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let fearGreedHistoryChart = null;
     let fearGreedGauge = null;
+    let stockStrengthChart = null;
+    let stockBreadthChart = null;
+    let vixChart = null;
 
     /**
      * 获取并处理恐慌贪婪指数数据
@@ -35,11 +38,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
-            // 更新所有UI组件
             updateSummary(data.fear_and_greed);
-            updateComparisonValues(data.fear_and_greed); // <<< 新增：调用函数更新对比卡片
+            updateComparisonValues(data.fear_and_greed);
             createGaugeChart(data.fear_and_greed);
             createHistoryChart(data.fear_and_greed_historical.data);
+
+            createStrengthChart(data.stock_price_strength);
+            createBreadthChart(data.stock_price_breadth);
+            createVixChart(data.market_volatility_vix, data.market_volatility_vix_50);
 
         } catch (error) {
             console.error("Could not load Fear & Greed data:", error);
@@ -65,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * [新增] 更新历史对比值卡片
+     * 更新历史对比值卡片
      */
     function updateComparisonValues(summaryData) {
         const updateText = (id, value) => {
@@ -147,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointHoverBorderWidth: 2,
                     pointHoverBackgroundColor: '#fff',
                     fill: true,
-                    // ===== 修正开始: 'segment' 对象必须在 'datasets' 内部 =====
                     segment: {
                         borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
                         backgroundColor: ctx => {
@@ -160,7 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             return gradient;
                         }
                     }
-                    // ===== 修正结束 =====
                 }]
             },
             options: {
@@ -201,7 +205,273 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-                // 'segment' 对象已从此处移除，因为它位置错误
+            }
+        });
+    }
+
+    /**
+     * 创建股价强度历史图表
+     */
+    function createStrengthChart(strengthData) {
+        const ctx = document.getElementById('stock-strength-chart').getContext('2d');
+        if (stockStrengthChart) {
+            stockStrengthChart.destroy();
+        }
+        const dataPoints = strengthData.data.map(d => ({ x: d.x, y: d.y, rating: d.rating.toLowerCase() }));
+
+        // 更新评级标签
+        const currentRating = strengthData.rating.toLowerCase();
+        const badge = document.getElementById('strength-rating-badge');
+        if (badge) {
+            const color = RATING_COLORS[currentRating] || '#fff';
+            badge.textContent = strengthData.rating;
+            badge.style.borderColor = color;
+            badge.style.color = color;
+        }
+
+        stockStrengthChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: '股价强度',
+                    data: dataPoints,
+                    tension: 0.4,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBorderWidth: 2,
+                    pointHoverBackgroundColor: '#fff',
+                    fill: true,
+                    segment: {
+                        borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
+                        backgroundColor: ctx => {
+                            const chartArea = ctx.chart.chartArea;
+                            if (!chartArea) return null;
+                            const gradient = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                            const color = RATING_COLORS[ctx.p1.raw.rating] || '#ffffff';
+                            gradient.addColorStop(0, `${color}80`);
+                            gradient.addColorStop(1, `${color}05`);
+                            return gradient;
+                        }
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd', displayFormats: { month: 'yyyy-MM' } },
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT, maxRotation: 0, autoSkip: true, autoSkipPadding: 20 }
+                    },
+                    y: {
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `强度: ${context.parsed.y.toFixed(2)}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 创建股价宽度历史图表
+     */
+    function createBreadthChart(breadthData) {
+        const ctx = document.getElementById('stock-breadth-chart').getContext('2d');
+        if (stockBreadthChart) {
+            stockBreadthChart.destroy();
+        }
+        const dataPoints = breadthData.data.map(d => ({ x: d.x, y: d.y, rating: d.rating.toLowerCase() }));
+
+        // 更新评级标签
+        const currentRating = breadthData.rating.toLowerCase();
+        const badge = document.getElementById('breadth-rating-badge');
+        if (badge) {
+            const color = RATING_COLORS[currentRating] || '#fff';
+            badge.textContent = breadthData.rating;
+            badge.style.borderColor = color;
+            badge.style.color = color;
+        }
+
+        stockBreadthChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: '股价宽度',
+                    data: dataPoints,
+                    tension: 0.4,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBorderWidth: 2,
+                    pointHoverBackgroundColor: '#fff',
+                    fill: true,
+                    segment: {
+                        borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
+                        backgroundColor: ctx => {
+                            const chartArea = ctx.chart.chartArea;
+                            if (!chartArea) return null;
+                            const gradient = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                            const color = RATING_COLORS[ctx.p1.raw.rating] || '#ffffff';
+                            gradient.addColorStop(0, `${color}80`);
+                            gradient.addColorStop(1, `${color}05`);
+                            return gradient;
+                        }
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd', displayFormats: { month: 'yyyy-MM' } },
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT, maxRotation: 0, autoSkip: true, autoSkipPadding: 20 }
+                    },
+                    y: {
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                return `宽度: ${context.parsed.y.toFixed(2)}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 创建VIX及其50日均线历史图表
+     */
+    function createVixChart(vixData, vix50Data) {
+        const ctx = document.getElementById('vix-chart').getContext('2d');
+        if (vixChart) {
+            vixChart.destroy();
+        }
+        const vixDataPoints = vixData.data.map(d => ({ x: d.x, y: d.y, rating: d.rating.toLowerCase() }));
+        const vix50DataPoints = vix50Data.data.map(d => ({ x: d.x, y: d.y }));
+
+        // 更新评级标签
+        const currentRating = vixData.rating.toLowerCase();
+        const badge = document.getElementById('vix-rating-badge');
+        if (badge) {
+            const color = RATING_COLORS[currentRating] || '#fff';
+            badge.textContent = vixData.rating;
+            badge.style.borderColor = color;
+            badge.style.color = color;
+        }
+
+        vixChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'VIX',
+                    data: vixDataPoints,
+                    tension: 0.4,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBorderWidth: 2,
+                    pointHoverBackgroundColor: '#fff',
+                    fill: true,
+                    segment: {
+                        borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
+                        backgroundColor: ctx => {
+                            const chartArea = ctx.chart.chartArea;
+                            if (!chartArea) return null;
+                            const gradient = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                            const color = RATING_COLORS[ctx.p1.raw.rating] || '#ffffff';
+                            gradient.addColorStop(0, `${color}80`);
+                            gradient.addColorStop(1, `${color}05`);
+                            return gradient;
+                        }
+                    }
+                }, {
+                    label: '50日移动均线',
+                    data: vix50DataPoints,
+                    borderColor: 'rgba(138, 153, 192, 0.9)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    tension: 0.4,
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd', displayFormats: { month: 'yyyy-MM' } },
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT, maxRotation: 0, autoSkip: true, autoSkipPadding: 20 }
+                    },
+                    y: {
+                        grid: { color: CHART_GRID_COLOR },
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            color: CHART_TICK_COLOR,
+                            font: CHART_FONT,
+                            boxWidth: 15,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(29, 36, 58, 0.95)',
+                        titleColor: '#00f5d4',
+                        bodyColor: '#e0e5f3',
+                        borderColor: '#00f5d4',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: true,
+                    }
+                }
             }
         });
     }
