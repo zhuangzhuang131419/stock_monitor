@@ -74,6 +74,9 @@ jobs:
           # <<< 新增：运行总仓位收益率计算脚本 >>>
           echo "=== Running calculate_return.py ==="
           python calculate_return.py
+          
+          # 拉CNN恐贪
+          python scripts/CNN_fear_greed_index.py
 
       # 第5步：将新生成或更新的文件提交回您的代码仓库
       - name: Commit updated files
@@ -81,7 +84,7 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           # <<< 修改：在 git add 命令中加入 portfolio_return.json >>>
-          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json portfolio_assets_returns.json
+          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json portfolio_assets_returns.json data/fear_greed_index.json
           # 检查是否有文件被修改，如果有，才执行提交和推送
           git diff --staged --quiet || git commit -m "📊 Automated data, charts, and returns update"
           git push

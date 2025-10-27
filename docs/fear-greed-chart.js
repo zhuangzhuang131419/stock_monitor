@@ -35,7 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
+            // 更新所有UI组件
             updateSummary(data.fear_and_greed);
+            updateComparisonValues(data.fear_and_greed); // <<< 新增：调用函数更新对比卡片
             createGaugeChart(data.fear_and_greed);
             createHistoryChart(data.fear_and_greed_historical.data);
 
@@ -50,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * 更新概览文本字段
-     * @param {object} summaryData - 来自JSON的 fear_and_greed 对象
      */
     function updateSummary(summaryData) {
         document.getElementById('fg-last-updated').textContent = `数据最后更新于: ${new Date(summaryData.timestamp).toLocaleString()}`;
@@ -58,17 +59,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const ratingSpan = document.getElementById('fg-score-rating');
         const ratingText = summaryData.rating;
         ratingSpan.textContent = ratingText.charAt(0).toUpperCase() + ratingText.slice(1);
-        ratingSpan.style.color = RATING_COLORS[ratingText.toLowerCase()] || '#fff';
+        const ratingColor = RATING_COLORS[ratingText.toLowerCase()] || '#fff';
+        ratingSpan.style.color = ratingColor;
+        document.getElementById('fg-score-value').style.textShadow = `0 0 15px ${ratingColor}60`;
+    }
 
-        document.getElementById('fg-prev-close').textContent = summaryData.previous_close.toFixed(1);
-        document.getElementById('fg-prev-week').textContent = summaryData.previous_1_week.toFixed(1);
-        document.getElementById('fg-prev-month').textContent = summaryData.previous_1_month.toFixed(1);
-        document.getElementById('fg-prev-year').textContent = summaryData.previous_1_year.toFixed(1);
+    /**
+     * [新增] 更新历史对比值卡片
+     */
+    function updateComparisonValues(summaryData) {
+        const updateText = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = (typeof value === 'number') ? value.toFixed(1) : 'N/A';
+            }
+        };
+
+        updateText('fg-prev-close', summaryData.previous_close);
+        updateText('fg-prev-week', summaryData.previous_1_week);
+        updateText('fg-prev-month', summaryData.previous_1_month);
+        updateText('fg-prev-year', summaryData.previous_1_year);
     }
 
     /**
      * 创建当前分数的仪表盘图
-     * @param {object} summaryData - 来自JSON的 fear_and_greed 对象
      */
     function createGaugeChart(summaryData) {
         const ctx = document.getElementById('fear-greed-gauge').getContext('2d');
@@ -91,9 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     data: [score, 100 - score],
                     backgroundColor: [gradient, 'rgba(38, 48, 77, 0.8)'],
-                    borderColor: ['transparent', 'transparent'],
+                    borderColor: 'transparent',
                     borderWidth: 0,
-                    borderRadius: 8,
+                    borderRadius: { outerStart: 8, outerEnd: 8, innerStart: 8, innerEnd: 8 },
                 }]
             },
             options: {
@@ -101,18 +115,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 maintainAspectRatio: false,
                 circumference: 180,
                 rotation: 270,
-                cutout: '80%',
-                plugins: {
-                    tooltip: { enabled: false },
-                    legend: { display: false }
-                }
+                cutout: '75%',
+                plugins: { tooltip: { enabled: false }, legend: { display: false } },
+                animation: { animateRotate: true, animateScale: false, duration: 1200 }
             }
         });
     }
 
     /**
      * 创建历史数据折线图
-     * @param {Array} historyData - 来自 fear_and_greed_historical 的数据数组
      */
     function createHistoryChart(historyData) {
         const ctx = document.getElementById('fear-greed-history-chart').getContext('2d');
@@ -132,30 +143,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     tension: 0.4,
                     borderWidth: 2.5,
                     pointRadius: 0,
-                    pointHoverRadius: 5,
+                    pointHoverRadius: 6,
                     pointHoverBorderWidth: 2,
-                    pointHoverBackgroundColor: '#fff'
+                    pointHoverBackgroundColor: '#fff',
+                    fill: true,
+                    // ===== 修正开始: 'segment' 对象必须在 'datasets' 内部 =====
+                    segment: {
+                        borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
+                        backgroundColor: ctx => {
+                            const chartArea = ctx.chart.chartArea;
+                            if (!chartArea) return null;
+                            const gradient = ctx.chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                            const color = RATING_COLORS[ctx.p1.raw.rating] || '#ffffff';
+                            gradient.addColorStop(0, `${color}80`);
+                            gradient.addColorStop(1, `${color}05`);
+                            return gradient;
+                        }
+                    }
+                    // ===== 修正结束 =====
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
+                interaction: { mode: 'index', intersect: false },
                 scales: {
                     x: {
                         type: 'time',
-                        time: {
-                            unit: 'month',
-                            tooltipFormat: 'yyyy-MM-dd',
-                            displayFormats: {
-                                month: 'yyyy-MM'
-                            }
-                        },
+                        time: { unit: 'month', tooltipFormat: 'yyyy-MM-dd', displayFormats: { month: 'yyyy-MM' } },
                         grid: { color: CHART_GRID_COLOR },
-                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT, maxRotation: 0, autoSkip: true }
+                        ticks: { color: CHART_TICK_COLOR, font: CHART_FONT, maxRotation: 0, autoSkip: true, autoSkipPadding: 20 }
                     },
                     y: {
                         beginAtZero: true,
@@ -183,11 +200,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     }
-                },
-                segment: {
-                    borderColor: ctx => RATING_COLORS[ctx.p1.raw.rating] || '#fff',
-                    backgroundColor: ctx => (RATING_COLORS[ctx.p1.raw.rating] || '#fff') + '33' // Adding alpha for area fill
                 }
+                // 'segment' 对象已从此处移除，因为它位置错误
             }
         });
     }
