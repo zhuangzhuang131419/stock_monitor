@@ -6,9 +6,15 @@ import json
 import warnings
 import requests
 import time
+import os
 
 warnings.filterwarnings('ignore')
 
+# <<< 新增: 动态构建路径 >>>
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
 
 class PortfolioAnalyzer:
     def __init__(self, csv_file_path):
@@ -571,6 +577,7 @@ class PortfolioAnalyzer:
         """
         保存结果到JSON文件
         """
+        output_path = os.path.join(DATA_DIR, output_file)
         # 准备输出数据
         output_data = {
             'analysis_date': datetime.now().isoformat(),
@@ -593,11 +600,11 @@ class PortfolioAnalyzer:
             }
 
         # 保存到文件
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
 
-        print(f"结果已保存到: {output_file}")
-        return output_file
+        print(f"结果已保存到: {output_path}")
+        return output_path
 
     def print_summary(self):
         """
@@ -660,7 +667,8 @@ def main():
     print("投资组合收益率历史获取工具 (支持股票、期权和现金)")
 
     # 初始化分析器
-    analyzer = PortfolioAnalyzer('portfolio_details_history.csv')
+    history_csv_path = os.path.join(DATA_DIR, 'portfolio_details_history.csv')
+    analyzer = PortfolioAnalyzer(history_csv_path)
 
     # 执行分析
     if analyzer.analyze_portfolio():

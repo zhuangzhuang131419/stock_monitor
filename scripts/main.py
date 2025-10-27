@@ -13,6 +13,16 @@ import urllib3
 from datetime import datetime
 import pytz
 
+# <<< 新增: 动态构建路径 >>>
+# 获取当前脚本所在的目录
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 获取根目录 (scripts目录的上一级)
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+# 定义数据目录
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+# 确保data目录存在
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # 禁用在代理模式下可能出现的 InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -45,7 +55,7 @@ def load_config():
     """
     从 config.ini 文件加载所有配置。
     """
-    config_file = 'config.ini'
+    config_file = os.path.join(ROOT_DIR, 'config.ini')
     if not os.path.exists(config_file):
         print(f"错误: 配置文件 '{config_file}' 不存在，请先创建。")
         sys.exit()
@@ -57,9 +67,9 @@ def load_config():
         # [General] & [Settings]
         data_source = config.getint('General', 'data_source', fallback=0)
         api_key = config.get('General', 'api_key', fallback=None)
-        history_file = config.get('General', 'history_file')
-        plot_file = config.get('General', 'plot_file')
-        pie_chart_file = config.get('General', 'pie_chart_file')
+        history_file = os.path.join(DATA_DIR, config.get('General', 'history_file'))
+        plot_file = os.path.join(DATA_DIR, config.get('General', 'plot_file'))
+        pie_chart_file = os.path.join(DATA_DIR, config.get('General', 'pie_chart_file'))
         max_retries = config.getint('Settings', 'max_retries')
         retry_delay = config.getint('Settings', 'retry_delay_seconds')
 

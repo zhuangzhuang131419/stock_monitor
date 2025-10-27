@@ -1,10 +1,17 @@
 import pandas as pd
 from datetime import datetime
 import json
+import os
+
+# <<< 新增: 动态构建路径 >>>
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # --- 配置 ---
-HISTORY_FILE = 'portfolio_details_history.csv'
-OUTPUT_FILE = 'portfolio_return.json'
+HISTORY_FILE = os.path.join(DATA_DIR, 'portfolio_details_history.csv')
+OUTPUT_FILE = os.path.join(DATA_DIR, 'portfolio_return.json')
 # 此列表用于计算 'total_value'，total_value 自身也应被排除
 EXCLUDE_COLS_FROM_SUM = ['total_value']
 

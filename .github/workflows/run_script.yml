@@ -42,17 +42,16 @@ jobs:
             pip install -r requirements.txt
           else
             echo "⚠️ requirements.txt not found, installing basic dependencies..."
-            pip install requests pandas matplotlib numpy yfinance
+            pip install requests pandas matplotlib numpy yfinance pytz
           fi
 
       # 第4步：运行主分析和收益计算脚本
-      - name: Run main and return calculation scripts
+      - name: Run all data generation scripts
         env:
           ALPHA_API_KEY: ${{ secrets.ALPHA_API_KEY }}
         run: |
           echo "=== Running main.py ==="
           
-          # 如果设置了 GitHub Secrets，则替换 config.ini 中的 API Key
           if [ -n "${ALPHA_API_KEY}" ]; then
             echo "✅ Found ALPHA_API_KEY from secrets. Updating config.ini..."
             if grep -q "^api_key" config.ini; then
@@ -64,27 +63,31 @@ jobs:
             echo "⚠️ Warning: ALPHA_API_KEY not set. Using existing key in config.ini."
           fi
 
-          # 运行主程序
-          python main.py
+          # <<< 修改: 使用新的脚本路径 >>>
+          python scripts/main.py
           
-          echo "=== Running get_asset_performance.py for detailed returns ==="
-          # 运行新脚本，生成个股的表现 asset_performance.json
-          python get_asset_performance.py
+          echo "=== Running get_asset_performance.py ==="
+          python scripts/get_asset_performance.py
           
-          # <<< 新增：运行总仓位收益率计算脚本 >>>
           echo "=== Running calculate_return.py ==="
-          python calculate_return.py
+          python scripts/calculate_return.py
           
-          # 拉CNN恐贪
+          echo "=== Running CNN_fear_greed_index.py ==="
           python scripts/CNN_fear_greed_index.py
 
       # 第5步：将新生成或更新的文件提交回您的代码仓库
-      - name: Commit updated files
+      - name: Commit updated data files
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          # <<< 修改：在 git add 命令中加入 portfolio_return.json >>>
-          git add portfolio_details_history.csv portfolio_value_chart.png portfolio_pie_chart.png portfolio_return.json portfolio_assets_returns.json data/fear_greed_index.json
+          
+          # <<< 修改: git add 命令指向 data/ 目录下的文件 >>>
+          git add data/portfolio_details_history.csv data/portfolio_value_chart.png data/portfolio_pie_chart.png data/portfolio_return.json data/portfolio_assets_returns.json data/fear_greed_index.json
+          
           # 检查是否有文件被修改，如果有，才执行提交和推送
-          git diff --staged --quiet || git commit -m "📊 Automated data, charts, and returns update"
-          git push
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "📊 Automated data, charts, and returns update"
+            git push
+          fi

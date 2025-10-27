@@ -14,113 +14,110 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # 第一步：检出（Checkout）你的仓库代码
-      # 这是官方提供的 Action，用于在虚拟机中拉取你的代码
       - name: Checkout Your Repository
         uses: actions/checkout@v4
         with:
-          # `fetch-depth: 0` 会拉取所有的 commit 历史，这对于后续的 merge 操作是必需的
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 第二步：执行核心脚本：同步上游并保留个人数据
-      - name: Sync with Upstream and Preserve Data
+      # 第二步：执行核心脚本：迁移、备份、同步、恢复
+      - name: Migrate, Backup, Sync, and Restore
         run: |
           # =================================================================
           # 脚本开始
           # =================================================================
           
-          # 设置脚本在遇到错误时立即退出
           set -e
-
-          # 配置 git 用户信息，这样 Action 才能替你提交代码
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
 
-          # --- 1. 备份你的数据文件 ---
-          echo "Step 1: Backing up your data files..."
-          # 创建一个临时文件夹来存放你的个人数据文件
+          # --- 1. (新增) 自动为老用户迁移文件结构 ---
+          echo "Step 1: Checking for legacy file structure and migrating if necessary..."
+          # 我们通过检查根目录是否存在一个关键数据文件来判断是否为旧结构
+          if [ -f "portfolio_details_history.csv" ]; then
+            echo "  > Legacy structure detected. Migrating data files to the 'data/' directory..."
+            # 确保 data 目录存在
+            mkdir -p data
+            # 使用 `git mv` 命令来移动文件。这会自动暂存文件的移动记录，比普通的`mv`更好。
+            # `find` 会查找根目录下的所有数据文件，然后 `git mv` 将它们移动到 data/ 目录。
+            # `-maxdepth 1` 确保只查找根目录，避免重复操作。
+            # `|| true` 防止在找不到任何文件时脚本出错。
+            find . -maxdepth 1 \( -name "*.csv" -o -name "*.json" -o -name "*.png" \) -exec git mv -f {} data/ \; || true
+            echo "  ✅ Migration complete. Your data files are now in the 'data' folder."
+            echo "  ℹ️  This change will be committed along with the upstream sync."
+          else
+            echo "  > Modern 'data/' directory structure confirmed. No migration needed."
+          fi
+
+          # --- 2. 备份你的数据文件 (基于新结构) ---
+          echo "Step 2: Backing up your data files..."
           mkdir -p .sync_backup_temp
-          # 查找所有需要保留的文件（png, csv, json, ini），并复制到临时文件夹
-          # -maxdepth 1 参数确保只查找仓库根目录下的文件，避免误操作
-          find . -maxdepth 1 \( -name "*.png" -o -name "*.csv" -o -name "*.json" -o -name "*.ini" \) -exec echo "  > Backing up {}" \; -exec cp {} .sync_backup_temp/ \; 2>/dev/null || true
+          
+          echo "  > Backing up config.ini..."
+          # 备份根目录的 config.ini
+          cp config.ini .sync_backup_temp/ 2>/dev/null || true
+          
+          echo "  > Backing up the entire 'data' directory..."
+          # 备份整个 data 文件夹
+          cp -r data .sync_backup_temp/ 2>/dev/null || true
+
           echo "Backup complete."
 
-          # --- 2. 同步上游仓库 ---
-          echo "Step 2: Syncing with upstream repository..."
-          # 添加我的原仓库地址作为"上游" (upstream)，如果已存在则忽略错误
+          # --- 3. 同步上游仓库 ---
+          echo "Step 3: Syncing with upstream repository..."
           git remote add upstream https://github.com/cli117/stock_monitor.git 2>/dev/null || echo "Upstream remote already exists"
-          
-          # 从上游仓库拉取最新的功能和代码
           echo "Fetching from upstream..."
           git fetch upstream
           
-          # 检查上游分支是否存在（支持 main 或 master）
           if git show-ref --verify --quiet refs/remotes/upstream/main; then
             UPSTREAM_BRANCH="upstream/main"
-            echo "Using upstream/main branch"
           elif git show-ref --verify --quiet refs/remotes/upstream/master; then
             UPSTREAM_BRANCH="upstream/master"
-            echo "Using upstream/master branch"
           else
             echo "❌ Error: Neither main nor master branch found in upstream repository"
-            echo "Available branches:"
-            git branch -r | grep upstream/ || echo "No upstream branches found"
             exit 1
           fi
 
-          # 尝试合并，如果有冲突则退出
           echo "Attempting to merge $UPSTREAM_BRANCH..."
           if ! git merge $UPSTREAM_BRANCH --allow-unrelated-histories --no-edit; then
-            echo "❌ MERGE CONFLICT DETECTED!"
-            echo "==================================="
-            echo "Sync aborted due to merge conflicts."
-            echo "Please resolve conflicts manually:"
-            echo "1. Run: git status"
-            echo "2. Resolve conflicts in affected files"
-            echo "3. Run: git add <resolved-files>"
-            echo "4. Run: git commit"
-            echo "5. Run: git push"
-            echo "==================================="
-            
-            # 清理：取消合并状态
+            echo "❌ MERGE CONFLICT DETECTED! Sync aborted."
             git merge --abort 2>/dev/null || true
-            
-            # 清理临时文件夹
             rm -rf .sync_backup_temp
-            
-            # 退出并标记为失败
             exit 1
           fi
-          
           echo "✅ Merge successful - no conflicts detected"
 
-          # --- 3. 恢复你的数据文件 ---
-          echo "Step 3: Restoring your data files..."
-          # 检查备份文件夹是否为空
+          # --- 4. 恢复你的数据文件 ---
+          echo "Step 4: Restoring your data files..."
           if [ -n "$(ls -A .sync_backup_temp/ 2>/dev/null)" ]; then
-            # 如果不为空，就把备份的文件复制回来，覆盖掉从上游同步过来的版本
-            cp -vf .sync_backup_temp/* . 2>/dev/null || echo "No files to restore"
+            echo "  > Restoring config.ini and the 'data' directory..."
+            # -r 递归复制, -f 强制覆盖，将备份的内容恢复到原位
+            cp -rf .sync_backup_temp/* . 2>/dev/null || true
             echo "✅ Restore complete."
           else
             echo "ℹ️  No data files needed to be restored."
           fi
 
-          # --- 4. 清理临时文件夹 ---
-          echo "Step 4: Cleaning up..."
+          # --- 5. 清理临时文件夹 ---
+          echo "Step 5: Cleaning up..."
           rm -rf .sync_backup_temp
           echo "✅ Cleanup complete."
 
-          # --- 5. 提交并推送更新 ---
-          echo "Step 5: Committing and pushing changes..."
-          # 检查是否有文件变动（拉取到的新功能或你恢复的数据）
+          # --- 6. 提交并推送更新 ---
+          echo "Step 6: Committing and pushing changes..."
+          # 检查是否有文件变动（包括迁移的文件和同步来的新代码）
           if git diff --quiet && git diff --staged --quiet; then
             echo "ℹ️  Your repository is already up-to-date. No push needed."
           else
             echo "📝 Changes detected. Committing and pushing to your repository..."
             git add -A
-            git commit -m "chore: Daily sync with upstream and preserve data [$(date +'%Y-%m-%d %H:%M:%S UTC')]"
+            # 修改 commit 信息，如果迁移发生了，就添加说明
+            if git diff --staged --quiet -- "data/"; then
+              git commit -m "chore: Daily sync with upstream [$(date +'%Y-%m-%d %H:%M:%S UTC')]"
+            else
+              git commit -m "feat: Auto-migrate data to new structure & sync upstream [$(date +'%Y-%m-%d %H:%M:%S UTC')]"
+            fi
             
-            # 推送更改，如果失败则报错
             if git push; then
               echo "✅ Push successful!"
             else

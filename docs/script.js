@@ -143,7 +143,7 @@ function updateAssetVisibilityIcon() {
  * 修复数据处理问题并优化样式，特别处理CASH资产
  */
 async function createPortfolioPieChart() {
-    const assetsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_assets_returns.json`;
+    const assetsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/data/portfolio_assets_returns.json`;
     const timestamp = new Date().getTime();
 
     try {
@@ -363,7 +363,7 @@ function toRgba(hex, alpha = 1) {
  * [优化] 3. 支持切换简化/详细模式，本地缓存
  */
 async function createPortfolioValueChart() {
-    const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+    const historyUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/data/portfolio_details_history.csv`;
     const timestamp = new Date().getTime();
 
     // --- 从 localStorage 读取用户偏好（默认详细模式）---
@@ -879,7 +879,7 @@ async function showHistoryTable() {
 
     historyModal.content.innerHTML = '<p style="text-align:center; padding: 20px;">正在加载历史数据...</p>';
     try {
-        const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+        const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/data/portfolio_details_history.csv`;
         const timestamp = new Date().getTime();
         const response = await fetch(`${csvUrl}?t=${timestamp}`);
 
@@ -1215,7 +1215,7 @@ function getRepoInfoFromURL() {
 }
 
 async function loadReturnsData() {
-    const returnsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_return.json`;
+    const returnsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/data/portfolio_return.json`;
     const timestamp = new Date().getTime();
 
     returnsDisplayContainer.innerHTML = '<p style="font-size: 14px; color: #6a737d;">正在加载收益率...</p>';
@@ -1296,7 +1296,7 @@ async function loadReturnsData() {
 
 // ========== 修改：更新页面加载逻辑 ==========
 async function loadInitialSummary() {
-    const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/portfolio_details_history.csv`;
+    const csvUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/data/portfolio_details_history.csv`;
     const lastUpdatedTime = document.getElementById('last-updated-time');
     const timestamp = new Date().getTime();
 
