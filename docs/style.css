@@ -693,3 +693,127 @@ input.invalid { border-color: var(--negative-color) !important; background-color
         left: 10px;
     }
 }
+
+/* --- Fear & Greed Index Chart --- */
+.fear-greed-wrapper-container {
+    margin-top: 30px;
+}
+
+.fear-greed-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+.fear-greed-header h3 {
+    margin: 0;
+    color: var(--primary-text);
+    font-size: 20px;
+    font-weight: 600;
+}
+.fear-greed-header p {
+    margin: 5px 0 0 0;
+    color: var(--secondary-text);
+    font-size: 12px;
+}
+
+.fear-greed-main-content {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 25px;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.fear-greed-gauge-area {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 240px;
+}
+
+#fear-greed-gauge {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.gauge-center-text {
+    position: absolute;
+    text-align: center;
+    color: var(--primary-text);
+    user-select: none;
+}
+
+.gauge-center-text #fg-score-value {
+    display: block;
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.gauge-center-text #fg-score-rating {
+    display: block;
+    font-size: 18px;
+    font-weight: 500;
+    text-transform: capitalize;
+    letter-spacing: 1px;
+}
+
+.fear-greed-history-area {
+    height: 240px;
+}
+
+#fear-greed-history-chart {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.fear-greed-summary-info {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid var(--container-border);
+}
+
+.summary-item {
+    text-align: center;
+}
+
+.summary-label {
+    display: block;
+    font-size: 12px;
+    color: var(--secondary-text);
+    margin-bottom: 5px;
+}
+
+.summary-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary-text);
+    font-family: 'Poppins', monospace;
+}
+
+/* Responsive adjustments for fear-greed chart */
+@media (max-width: 900px) {
+    .fear-greed-main-content {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+    .fear-greed-gauge-area {
+        height: 200px;
+    }
+    .fear-greed-history-area {
+        height: 220px;
+    }
+}
+
+@media (max-width: 768px) {
+    .fear-greed-summary-info {
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    .summary-item {
+        flex: 1 1 40%; /* Two items per row */
+    }
+}

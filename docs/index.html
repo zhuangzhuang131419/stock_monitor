@@ -56,6 +56,48 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- ========== 新增：恐慌贪婪指数图表容器 ========== -->
+            <div class="fear-greed-wrapper-container">
+                <div class="pie-chart-container"> <!-- 复用现有样式 -->
+                    <div class="fear-greed-header">
+                        <h3>CNN 恐慌与贪婪指数</h3>
+                        <p id="fg-last-updated">数据最后更新于: ...</p>
+                    </div>
+                    <div class="fear-greed-main-content">
+                        <div class="fear-greed-gauge-area">
+                            <canvas id="fear-greed-gauge"></canvas>
+                            <div class="gauge-center-text">
+                                <span id="fg-score-value">...</span>
+                                <span id="fg-score-rating">...</span>
+                            </div>
+                        </div>
+                        <div class="fear-greed-history-area">
+                            <canvas id="fear-greed-history-chart"></canvas>
+                        </div>
+                    </div>
+                     <div class="fear-greed-summary-info">
+                        <div class="summary-item">
+                            <span class="summary-label">昨日收盘</span>
+                            <span id="fg-prev-close" class="summary-value">...</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">一周前</span>
+                            <span id="fg-prev-week" class="summary-value">...</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">一个月前</span>
+                            <span id="fg-prev-month" class="summary-value">...</span>
+                        </div>
+                         <div class="summary-item">
+                            <span class="summary-label">一年前</span>
+                            <span id="fg-prev-year" class="summary-value">...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ========== 新增内容结束 ========== -->
+
                 <div class="summary-footer">
                     <p>数据最后更新于 <span id="last-updated-time">...</span></p>
                     <button id="force-refresh-btn" class="action-btn"><i class="fas fa-sync-alt"></i> 重载数据</button>
@@ -107,5 +149,6 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="fear-greed-chart.js"></script>
 </body>
 </html>
