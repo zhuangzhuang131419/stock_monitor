@@ -185,11 +185,11 @@ def get_stock_price_yfinance(ticker):
 
         elif market_state == 'POST':
             # 盘后时段：优先使用盘后价格
-            price = info.get('postMarketPrice')
-            price_type = "盘后价"
-            post_market_time = info.get('postMarketTime')
-            if post_market_time:
-                trading_day = datetime.fromtimestamp(post_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
+            price = info.get('regularMarketPrice') or info.get('currentPrice')  # 改为读取 regularMarketPrice
+            price_type = "收盘价"  # 修改标签为"收盘价"
+            regular_market_time = info.get('regularMarketTime')  # 使用 regularMarketTime 而不是 postMarketTime
+            if regular_market_time:
+                trading_day = datetime.fromtimestamp(regular_market_time, ET_TIMEZONE).strftime('%Y-%m-%d')
 
         # 兜底逻辑：如果上述都没获取到价格
         if price is None:
