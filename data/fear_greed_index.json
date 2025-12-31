@@ -1,23 +1,18 @@
 {
   "fear_and_greed": {
-    "score": 48.9142857142857,
+    "score": 45.9142857142857,
     "rating": "neutral",
-    "timestamp": "2025-12-30T22:14:24+00:00",
-    "previous_close": 49.1142857142857,
-    "previous_1_week": 57.7142857142857,
+    "timestamp": "2025-12-31T22:12:28+00:00",
+    "previous_close": 48.9142857142857,
+    "previous_1_week": 54.3142857142857,
     "previous_1_month": 21.771428571428572,
-    "previous_1_year": 28.6
+    "previous_1_year": 26.314285714285713
   },
   "fear_and_greed_historical": {
-    "timestamp": 1767132864000.0,
-    "score": 48.9142857142857,
+    "timestamp": 1767219148000.0,
+    "score": 45.9142857142857,
     "rating": "neutral",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 28.6,
-        "rating": "fear"
-      },
       {
         "x": 1735603200000.0,
         "y": 26.314285714285713,
@@ -1270,26 +1265,26 @@
       },
       {
         "x": 1767052800000.0,
-        "y": 48.9142857142857,
+        "y": 48.4285714285714,
         "rating": "neutral"
       },
       {
-        "x": 1767132864000.0,
-        "y": 48.9142857142857,
+        "x": 1767139200000.0,
+        "y": 45.9142857142857,
+        "rating": "neutral"
+      },
+      {
+        "x": 1767219148000.0,
+        "y": 45.9142857142857,
         "rating": "neutral"
       }
     ]
   },
   "market_momentum_sp500": {
-    "timestamp": 1767131997000.0,
-    "score": 46.2,
-    "rating": "neutral",
+    "timestamp": 1767216965000.0,
+    "score": 32.8,
+    "rating": "fear",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 5906.94,
-        "rating": "extreme greed"
-      },
       {
         "x": 1735603200000.0,
         "y": 5881.63,
@@ -2541,22 +2536,22 @@
         "rating": "extreme greed"
       },
       {
-        "x": 1767131997000.0,
-        "y": 6896.24,
+        "x": 1767139200000.0,
+        "y": 6845.5,
+        "rating": "extreme greed"
+      },
+      {
+        "x": 1767216965000.0,
+        "y": 6845.5,
         "rating": "extreme greed"
       }
     ]
   },
   "market_momentum_sp125": {
-    "timestamp": 1767131997000.0,
-    "score": 46.2,
-    "rating": "neutral",
+    "timestamp": 1767216965000.0,
+    "score": 32.8,
+    "rating": "fear",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 5727.736400000001,
-        "rating": "extreme greed"
-      },
       {
         "x": 1735603200000.0,
         "y": 5730.49328,
@@ -3808,22 +3803,22 @@
         "rating": "extreme greed"
       },
       {
-        "x": 1767131997000.0,
-        "y": 6606.9492,
+        "x": 1767139200000.0,
+        "y": 6611.4784,
+        "rating": "extreme greed"
+      },
+      {
+        "x": 1767216965000.0,
+        "y": 6611.4784,
         "rating": "extreme greed"
       }
     ]
   },
   "stock_price_strength": {
-    "timestamp": 1767132851000.0,
-    "score": 53.8,
+    "timestamp": 1767219148000.0,
+    "score": 51,
     "rating": "neutral",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": -1.0774964480152478,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": -1.3162846773098065,
@@ -5075,22 +5070,22 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767132851000.0,
+        "x": 1767052800000.0,
         "y": 2.93058124530765,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767219148000.0,
+        "y": 2.72165773255978,
         "rating": "extreme fear"
       }
     ]
   },
   "stock_price_breadth": {
-    "timestamp": 1767132864000.0,
-    "score": 53.2,
+    "timestamp": 1767219148000.0,
+    "score": 51,
     "rating": "neutral",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 611.2049111184399,
-        "rating": "extreme greed"
-      },
       {
         "x": 1735603200000.0,
         "y": 592.0703364128779,
@@ -6342,22 +6337,22 @@
         "rating": "extreme greed"
       },
       {
-        "x": 1767132864000.0,
+        "x": 1767052800000.0,
         "y": 1279.07914316828,
+        "rating": "extreme greed"
+      },
+      {
+        "x": 1767219148000.0,
+        "y": 1253.09737670784,
         "rating": "extreme greed"
       }
     ]
   },
   "put_call_options": {
-    "timestamp": 1767129300000.0,
-    "score": 15.4,
+    "timestamp": 1767217897000.0,
+    "score": 19,
     "rating": "extreme fear",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 0.6554812507947323,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": 0.6521934051646687,
@@ -7599,22 +7594,22 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767129300000.0,
+        "x": 1767052800000.0,
         "y": 0.697336647946964,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767217897000.0,
+        "y": 0.686606943671668,
         "rating": "extreme fear"
       }
     ]
   },
   "market_volatility_vix": {
-    "timestamp": 1767129301000.0,
+    "timestamp": 1767215701000.0,
     "score": 50,
     "rating": "neutral",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 17.4,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": 17.35,
@@ -8866,22 +8861,22 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767129301000.0,
-        "y": 14.33,
+        "x": 1767139200000.0,
+        "y": 14.95,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767215701000.0,
+        "y": 14.95,
         "rating": "extreme fear"
       }
     ]
   },
   "market_volatility_vix_50": {
-    "timestamp": 1767129301000.0,
+    "timestamp": 1767215701000.0,
     "score": 50,
     "rating": "neutral",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 16.683200000000003,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": 16.6696,
@@ -10133,22 +10128,22 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767129301000.0,
-        "y": 17.5428,
+        "x": 1767139200000.0,
+        "y": 17.4772,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767215701000.0,
+        "y": 17.4772,
         "rating": "extreme fear"
       }
     ]
   },
   "junk_bond_demand": {
-    "timestamp": 1767129000000.0,
-    "score": 90.2,
+    "timestamp": 1767215400000.0,
+    "score": 94.6,
     "rating": "extreme greed",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": 1.5604948358014703,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": 1.5808276376624095,
@@ -11395,22 +11390,22 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767129000000.0,
-        "y": 1.2466517982473602,
+        "x": 1767052800000.0,
+        "y": 1.24665179824736,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767215400000.0,
+        "y": 1.23328367166914,
         "rating": "extreme fear"
       }
     ]
   },
   "safe_haven_demand": {
-    "timestamp": 1767128399000.0,
-    "score": 33.6,
-    "rating": "fear",
+    "timestamp": 1767214799000.0,
+    "score": 23,
+    "rating": "extreme fear",
     "data": [
-      {
-        "x": 1735516800000.0,
-        "y": -0.2004283014607016,
-        "rating": "extreme fear"
-      },
       {
         "x": 1735603200000.0,
         "y": -0.7183465292357246,
@@ -12657,8 +12652,13 @@
         "rating": "extreme fear"
       },
       {
-        "x": 1767128399000.0,
-        "y": 1.0443900188611899,
+        "x": 1767052800000.0,
+        "y": 1.03922312829593,
+        "rating": "extreme fear"
+      },
+      {
+        "x": 1767214799000.0,
+        "y": 0.48451492617545705,
         "rating": "extreme fear"
       }
     ]
