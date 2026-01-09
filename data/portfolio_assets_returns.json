@@ -1,17 +1,17 @@
 {
-  "analysis_date": "2026-01-08T22:31:50.603864",
+  "analysis_date": "2026-01-09T22:31:46.317541",
   "portfolio_returns": {
     "ADBE": {
-      "current_price": 339.04,
-      "total_value": 33904.0,
+      "current_price": 333.95,
+      "total_value": 33395.0,
       "asset_type": "stock",
       "returns": {
-        "previous_trading_day": 0.28,
-        "week_to_date": 1.72,
-        "month_to_date": -3.13,
-        "year_to_date": -3.13,
-        "past_30_trading_days": 6.37,
-        "past_250_trading_days": -19.2
+        "previous_trading_day": -1.5,
+        "week_to_date": 0.2,
+        "month_to_date": -4.58,
+        "year_to_date": -4.58,
+        "past_30_trading_days": 4.51,
+        "past_250_trading_days": -20.41
       }
     },
     "CASH": {
@@ -28,16 +28,16 @@
       }
     },
     "IBKR": {
-      "current_price": 70.16,
-      "total_value": 2306.94,
+      "current_price": 70.47,
+      "total_value": 2317.14,
       "asset_type": "stock",
       "returns": {
-        "previous_trading_day": -1.65,
-        "week_to_date": 4.36,
-        "month_to_date": 9.1,
-        "year_to_date": 9.1,
-        "past_30_trading_days": 12.52,
-        "past_250_trading_days": 47.79
+        "previous_trading_day": 0.44,
+        "week_to_date": 4.82,
+        "month_to_date": 9.58,
+        "year_to_date": 9.58,
+        "past_30_trading_days": 11.69,
+        "past_250_trading_days": 48.45
       }
     },
     "LULU_2026-09-18_100_CALL": {
@@ -54,29 +54,29 @@
       }
     },
     "SPY": {
-      "current_price": 689.51,
-      "total_value": 186167.7,
+      "current_price": 694.07,
+      "total_value": 187398.9,
       "asset_type": "stock",
       "returns": {
-        "previous_trading_day": -0.01,
-        "week_to_date": 0.93,
-        "month_to_date": 1.11,
-        "year_to_date": 1.11,
-        "past_30_trading_days": 3.41,
-        "past_250_trading_days": 18.34
+        "previous_trading_day": 0.66,
+        "week_to_date": 1.6,
+        "month_to_date": 1.78,
+        "year_to_date": 1.78,
+        "past_30_trading_days": 3.13,
+        "past_250_trading_days": 19.12
       }
     },
     "UNH": {
-      "current_price": 346.85,
-      "total_value": 69370.0,
+      "current_price": 343.98,
+      "total_value": 68796.0,
       "asset_type": "stock",
       "returns": {
-        "previous_trading_day": 1.51,
-        "week_to_date": 3.11,
-        "month_to_date": 5.07,
-        "year_to_date": 5.07,
-        "past_30_trading_days": 9.44,
-        "past_250_trading_days": -32.24
+        "previous_trading_day": -0.83,
+        "week_to_date": 2.25,
+        "month_to_date": 4.2,
+        "year_to_date": 4.2,
+        "past_30_trading_days": 6.13,
+        "past_250_trading_days": -32.81
       }
     }
   }
